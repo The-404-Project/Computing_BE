@@ -1,21 +1,23 @@
 const express = require('express')
+const cors = require('cors')
+
+// Import Routes
 const modul3Router = require('./modules/modul3_surat_keterangan/route')
+const modul4Router = require('./modules/modul4_surat_pengantar/route') 
 
 const app = express()
 
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200)
-  }
-  next()
-})
-
+// Middleware
+app.use(cors())
 app.use(express.json())
 
+// --- MOUNTING ROUTES ---
+
+// Modul 3
 app.use('/api', modul3Router)
 
-module.exports = app
+// Modul 4 (Surat Pengantar)
+// URL endpoint: http://localhost:5000/api/surat-pengantar/generate
+app.use('/api/surat-pengantar', modul4Router) 
 
+module.exports = app
