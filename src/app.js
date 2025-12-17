@@ -4,6 +4,7 @@ const cors = require('cors')
 // Import Routes
 const modul3Router = require('./modules/modul3_surat_keterangan/route')
 const modul4Router = require('./modules/modul4_surat_pengantar/route') 
+const modul1Router = require('./modules/modul1_surat_tugas/route') // <--- TAMBAH INI
 
 const app = express()
 
@@ -17,7 +18,10 @@ app.use(express.json())
 app.use('/api', modul3Router)
 
 // Modul 4 (Surat Pengantar)
-// URL endpoint: http://localhost:5000/api/surat-pengantar/generate
 app.use('/api/surat-pengantar', modul4Router) 
+
+// Modul 1 (Surat Tugas) - TAMBAH INI
+// URL endpoint: http://localhost:5000/api/surat-tugas/generate
+app.use('/api/surat-tugas', modul1Router) 
 
 module.exports = app
