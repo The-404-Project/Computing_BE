@@ -4,7 +4,6 @@
 
 CREATE DATABASE IF NOT EXISTS db_persuratanfakultas;
 USE db_persuratanfakultas;
-
 -- ============================================
 -- TABLE: users
 -- ============================================

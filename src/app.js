@@ -1,3 +1,4 @@
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 
@@ -20,6 +21,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// static files output (DOCX download)
+app.use('/files', express.static(path.join(__dirname, '../output/generated_documents')));
 
 // untuk setiap modul menambkan route seperti ini, untuk sub routenya harus di folder routes masing masing!!!!
 // jangan menambahkan logika modul di sini!!!
