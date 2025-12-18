@@ -1,27 +1,30 @@
-const express = require('express')
-const cors = require('cors')
+const express = require('express');
+const cors = require('cors');
 
-// Import Routes
-const modul3Router = require('./modules/modul3_surat_keterangan/route')
-const modul4Router = require('./modules/modul4_surat_pengantar/route') 
-const modul1Router = require('./modules/modul1_surat_tugas/route') // <--- TAMBAH INI
+const User = require('./models/User');
+const Document = require('./models/Document');
+const Mahasiswa = require('./models/Mahasiswa');
+const Template = require('./models/Template');
 
-const app = express()
+const dashboardRoute = require('./modules/modul8_dashboard/route');
+const suratTugasRoute = require('./modules/modul1_surat_tugas/route');
+const suratUndanganRoute = require('./modules/modul2_surat_undangan/route');
+const suratKeteranganRoute = require('./modules/modul3_surat_keterangan/route');
+const suratPengantarRoute = require('./modules/modul4_surat_pengantar/route');
 
-// Middleware
-app.use(cors())
-app.use(express.json())
+const app = express();
 
-// --- MOUNTING ROUTES ---
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Modul 3
-app.use('/api', modul3Router)
+// untuk setiap modul menambkan route seperti ini, untuk sub routenya harus di folder routes masing masing!!!!
+// jangan menambahkan logika modul di sini!!!
+app.use('/api/auth', dashboardRoute);
+app.use('/api/dashboard', dashboardRoute);
+app.use('/api', suratTugasRoute);
+app.use('/api', suratUndanganRoute);
+app.use('/api', suratKeteranganRoute);
+app.use('/api', suratPengantarRoute);
 
-// Modul 4 (Surat Pengantar)
-app.use('/api/surat-pengantar', modul4Router) 
-
-// Modul 1 (Surat Tugas) - TAMBAH INI
-// URL endpoint: http://localhost:5000/api/surat-tugas/generate
-app.use('/api/surat-tugas', modul1Router) 
-
-module.exports = app
+module.exports = app;

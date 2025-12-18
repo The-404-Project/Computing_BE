@@ -1,17 +1,15 @@
 const express = require('express');
 const router = express.Router();
+const controller = require('./controller');
 
-// Import controller yang baru saja kamu perbaiki
-const controller = require('./controller'); 
-
-// Debugging: Cek apakah fungsi login terbaca?
-// Kalau muncul 'undefined' di terminal, berarti file controller belum ke-save
-if (!controller.login) {
-    console.error("❌ FATAL ERROR: Fungsi 'login' tidak ditemukan di controller Modul 8!");
-}
-
-// Definisikan Route
-// POST http://localhost:4000/api/auth/login
+// Auth Routes
 router.post('/login', controller.login);
+
+// User Management Routes (hanya admin)
+router.get('/users', controller.getAllUsers);
+router.get('/users/:id', controller.getUserById);
+router.post('/users', controller.createUser);
+router.put('/users/:id', controller.updateUser);
+router.delete('/users/:id', controller.deleteUser);
 
 module.exports = router;
