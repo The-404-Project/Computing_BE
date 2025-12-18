@@ -12,4 +12,10 @@ router.post('/users', controller.createUser);
 router.put('/users/:id', controller.updateUser);
 router.delete('/users/:id', controller.deleteUser);
 
+// Document Search and Filter Routes
+router.get('/documents/search', controller.searchDocuments);
+router.get('/documents/stats', controller.getDocumentStats);
+router.get('/documents/:id/download', controller.downloadDocument);
+router.get('/documents/export', controller.exportHistory);
+
 module.exports = router;

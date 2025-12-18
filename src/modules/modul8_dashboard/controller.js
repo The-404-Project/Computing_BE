@@ -217,6 +217,354 @@ const deleteUser = async (req, res) => {
   }
 };
 
+// Search and Filter Documents
+const searchDocuments = async (req, res) => {
+  try {
+    const Document = require('../../models/Document');
+    const User = require('../../models/User');
+    const { Op } = require('sequelize');
+
+    // Get query parameters
+    const { search = '', doc_type = '', status = '', created_by = '', date_from = '', date_to = '', page = 1, limit = 10 } = req.query;
+
+    // Build where clause
+    const whereClause = {};
+
+    // Search in doc_number and metadata (using JSON search for metadata)
+    if (search) {
+      whereClause[Op.or] = [
+        { doc_number: { [Op.like]: `%${search}%` } },
+        // For JSON field, we'll search in doc_number for now
+        // Full JSON search requires MySQL 5.7+ with JSON functions
+      ];
+    }
+
+    // Filter by doc_type
+    if (doc_type) {
+      whereClause.doc_type = doc_type;
+    }
+
+    // Filter by status
+    if (status) {
+      whereClause.status = status;
+    }
+
+    // Filter by created_by
+    if (created_by) {
+      whereClause.created_by = parseInt(created_by);
+    }
+
+    // Filter by date range
+    if (date_from || date_to) {
+      whereClause.created_at = {};
+      if (date_from) {
+        whereClause.created_at[Op.gte] = new Date(date_from);
+      }
+      if (date_to) {
+        whereClause.created_at[Op.lte] = new Date(date_to + ' 23:59:59');
+      }
+    }
+
+    // Calculate offset
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    // Get documents with pagination
+    const { count, rows: documents } = await Document.findAndCountAll({
+      where: whereClause,
+      order: [['created_at', 'DESC']],
+      limit: parseInt(limit),
+      offset: offset,
+    });
+
+    // Get user info for each document
+    const formattedDocuments = await Promise.all(
+      documents.map(async (doc) => {
+        let creator = null;
+        if (doc.created_by) {
+          const user = await User.findOne({ where: { user_id: doc.created_by } });
+          if (user) {
+            creator = {
+              id: user.user_id,
+              username: user.username,
+              full_name: user.full_name,
+              email: user.email,
+            };
+          }
+        }
+
+        return {
+          id: doc.id,
+          doc_number: doc.doc_number,
+          doc_type: doc.doc_type,
+          status: doc.status,
+          metadata: doc.metadata,
+          file_path: doc.file_path,
+          created_at: doc.created_at,
+          updated_at: doc.updated_at,
+          created_by: creator,
+        };
+      })
+    );
+
+    res.json({
+      documents: formattedDocuments,
+      pagination: {
+        total: count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(count / parseInt(limit)),
+      },
+    });
+  } catch (error) {
+    console.error('Search Documents Error:', error);
+    res.status(500).json({ message: 'Gagal mencari dokumen: ' + error.message });
+  }
+};
+
+// Get Document Statistics
+const getDocumentStats = async (req, res) => {
+  try {
+    const Document = require('../../models/Document');
+    const { Op, fn, col, literal } = require('sequelize');
+    const sequelize = require('../../config/database');
+
+    // Get total documents
+    const total = await Document.count();
+
+    // Get documents by status
+    const pending = await Document.count({
+      where: { status: { [Op.in]: ['draft', 'pending'] } },
+    });
+    const completed = await Document.count({
+      where: { status: { [Op.in]: ['approved', 'generated', 'sent'] } },
+    });
+
+    // Get documents by type
+    const byTypeResult = await Document.findAll({
+      attributes: ['doc_type', [fn('COUNT', col('id')), 'count']],
+      group: ['doc_type'],
+      raw: true,
+    });
+
+    const byType = byTypeResult.map((item) => ({
+      type: item.doc_type || 'unknown',
+      count: parseInt(item.count) || 0,
+    }));
+
+    // Get documents by month (last 6 months)
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    // Use raw query for DATE_FORMAT in MySQL
+    const byMonthResult = await sequelize.query(
+      `SELECT DATE_FORMAT(created_at, '%Y-%m') as month, COUNT(*) as count 
+       FROM documents 
+       WHERE created_at >= :sixMonthsAgo 
+       GROUP BY DATE_FORMAT(created_at, '%Y-%m') 
+       ORDER BY month ASC`,
+      {
+        replacements: { sixMonthsAgo },
+        type: sequelize.QueryTypes.SELECT,
+      }
+    );
+
+    const byMonth = byMonthResult.map((item) => ({
+      month: item.month,
+      count: parseInt(item.count) || 0,
+    }));
+
+    res.json({
+      total,
+      pending,
+      completed,
+      byType,
+      byMonth,
+    });
+  } catch (error) {
+    console.error('Get Document Stats Error:', error);
+    res.status(500).json({ message: 'Gagal mengambil statistik: ' + error.message });
+  }
+};
+
+// Download Document by ID (Regenerate from metadata)
+const downloadDocument = async (req, res) => {
+  try {
+    const Document = require('../../models/Document');
+    const { id } = req.params;
+    const { format = 'docx' } = req.query;
+
+    // Get document from database
+    const document = await Document.findOne({ where: { id: parseInt(id) } });
+    if (!document) {
+      return res.status(404).json({ message: 'Dokumen tidak ditemukan' });
+    }
+
+    // Get metadata
+    const metadata = document.metadata || {};
+    const docType = document.doc_type;
+
+    let result;
+
+    // Regenerate document based on doc_type
+    try {
+      switch (docType) {
+        case 'surat_tugas':
+          const suratTugasService = require('../modul1_surat_tugas/service');
+          const tugasData = {
+            jenis_surat: metadata.jenis_surat || 'surat_tugas_dosen',
+            nomorSurat: document.doc_number,
+            namaPegawai: metadata.nama || metadata.namaPegawai,
+            nip: metadata.nip,
+            pangkat: metadata.pangkat,
+            jabatan: metadata.jabatan,
+            tujuanTugas: metadata.tujuan || metadata.tujuanTugas,
+            keperluan: metadata.keperluan,
+            tanggalMulai: metadata.tanggal_mulai || metadata.tanggalMulai,
+            tanggalSelesai: metadata.tanggal_selesai || metadata.tanggalSelesai,
+            biaya: metadata.biaya,
+            kendaraan: metadata.kendaraan,
+          };
+          result = await suratTugasService.processSuratTugasGeneration(tugasData, format);
+          break;
+
+        case 'surat_undangan':
+          const undanganService = require('../modul2_surat_undangan/service');
+          const undanganData = {
+            nomorSurat: document.doc_number,
+            lampiran: metadata.lampiran,
+            perihal: metadata.perihal,
+            tanggalAcara: metadata.tanggal_acara || metadata.tanggalAcara,
+            tempat: metadata.tempat,
+            agenda: metadata.agenda,
+            list_tamu: metadata.list_tamu_json || metadata.list_tamu || [],
+            waktuMulai: metadata.waktu_mulai || metadata.waktuMulai,
+            waktuAcara: metadata.waktu_acara || metadata.waktuAcara,
+            waktuSelesai: metadata.waktu_selesai || metadata.waktuSelesai,
+          };
+          result = await undanganService.processSuratUndangan(undanganData, format);
+          break;
+
+        case 'surat_pengantar':
+          const pengantarService = require('../modul4_surat_pengantar/service');
+          const pengantarData = {
+            jenis_surat: metadata.jenis_surat,
+            metadata: metadata.metadata || metadata,
+            content_blocks: metadata.content_blocks,
+            dynamic_data: metadata.dynamic_data,
+          };
+          result = await pengantarService.processSuratGeneration(pengantarData, format);
+          break;
+
+        default:
+          return res.status(400).json({ message: `Tipe dokumen ${docType} belum didukung untuk download` });
+      }
+    } catch (regenerateError) {
+      console.error('Regenerate Error:', regenerateError);
+      return res.status(500).json({ message: 'Gagal regenerate dokumen: ' + regenerateError.message });
+    }
+
+    // Send file
+    res.set({
+      'Content-Type': result.mimeType,
+      'Content-Disposition': `attachment; filename=${result.fileName}`,
+      'Content-Length': result.buffer.length,
+    });
+
+    res.send(result.buffer);
+  } catch (error) {
+    console.error('Download Document Error:', error);
+    res.status(500).json({ message: 'Gagal mengunduh dokumen: ' + error.message });
+  }
+};
+
+// Export History to CSV
+const exportHistory = async (req, res) => {
+  try {
+    const Document = require('../../models/Document');
+    const User = require('../../models/User');
+    const { Op } = require('sequelize');
+
+    // Get query parameters (same as search)
+    const { search = '', doc_type = '', status = '', date_from = '', date_to = '' } = req.query;
+
+    // Build where clause (same as searchDocuments)
+    const whereClause = {};
+
+    if (search) {
+      whereClause[Op.or] = [{ doc_number: { [Op.like]: `%${search}%` } }];
+    }
+
+    if (doc_type) {
+      whereClause.doc_type = doc_type;
+    }
+
+    if (status) {
+      whereClause.status = status;
+    }
+
+    if (date_from || date_to) {
+      whereClause.created_at = {};
+      if (date_from) {
+        whereClause.created_at[Op.gte] = new Date(date_from);
+      }
+      if (date_to) {
+        whereClause.created_at[Op.lte] = new Date(date_to + ' 23:59:59');
+      }
+    }
+
+    // Get all documents (no pagination for export)
+    const documents = await Document.findAll({
+      where: whereClause,
+      order: [['created_at', 'DESC']],
+    });
+
+    // Get user info for each document
+    const formattedDocuments = await Promise.all(
+      documents.map(async (doc) => {
+        let creator = null;
+        if (doc.created_by) {
+          const user = await User.findOne({ where: { user_id: doc.created_by } });
+          if (user) {
+            creator = user.full_name || user.username;
+          }
+        }
+
+        return {
+          nomor_surat: doc.doc_number,
+          jenis_surat: doc.doc_type,
+          status: doc.status,
+          pembuat: creator || '-',
+          tanggal_dibuat: doc.created_at.toISOString().split('T')[0],
+          tanggal_diupdate: doc.updated_at.toISOString().split('T')[0],
+        };
+      })
+    );
+
+    // Generate CSV
+    const csvHeaders = 'Nomor Surat,Jenis Surat,Status,Pembuat,Tanggal Dibuat,Tanggal Diupdate\n';
+    const csvRows = formattedDocuments
+      .map((doc) => {
+        return `"${doc.nomor_surat}","${doc.jenis_surat}","${doc.status}","${doc.pembuat}","${doc.tanggal_dibuat}","${doc.tanggal_diupdate}"`;
+      })
+      .join('\n');
+
+    const csvContent = csvHeaders + csvRows;
+
+    // Set headers for CSV download
+    const fileName = `arsip_surat_${new Date().toISOString().split('T')[0]}.csv`;
+    res.set({
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename=${fileName}`,
+    });
+
+    // Add BOM for Excel compatibility
+    res.send('\ufeff' + csvContent);
+  } catch (error) {
+    console.error('Export History Error:', error);
+    res.status(500).json({ message: 'Gagal mengekspor history: ' + error.message });
+  }
+};
+
 module.exports = {
   login,
   getAllUsers,
@@ -224,4 +572,8 @@ module.exports = {
   createUser,
   updateUser,
   deleteUser,
+  searchDocuments,
+  getDocumentStats,
+  downloadDocument,
+  exportHistory,
 };
