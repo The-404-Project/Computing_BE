@@ -23,7 +23,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/auth', dashboardRoute);
 app.use('/api/dashboard', dashboardRoute);
 app.use('/api', suratTugasRoute);
-app.use('/api', suratUndanganRoute);
+app.use('/api/surat-undangan', suratUndanganRoute);
 app.use('/api', suratKeteranganRoute);
 app.use('/api', suratPengantarRoute);
 

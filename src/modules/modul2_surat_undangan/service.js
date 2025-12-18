@@ -1,70 +1,92 @@
-const { generateWordFile, generatePdfFile } = require('../../utils/doc_Generator');
+const { generateWordFile, generatePdfFile } = require('../../utils/doc_generator');
 
-// Helper: Ubah tanggal "2025-10-20" jadi "Senin"
+// Helper: Format Nama Hari (Senin, Selasa...)
 const getNamaHari = (dateString) => {
     if (!dateString) return '-';
+    // Pastikan valid date
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '-'; // Return strip jika format tanggal salah
     return date.toLocaleDateString('id-ID', { weekday: 'long' });
 };
 
-// Helper: Ubah tanggal "2025-10-20" jadi "20 Oktober 2025"
+// Helper: Format Tanggal Indo (20 Oktober 2025)
 const formatTanggalIndo = (dateString) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '-';
     return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 };
 
 const processSuratUndangan = async (data, format = 'docx') => {
+    // 1. Destructure Data
     const { 
-        jenis_surat, nomorSurat, lampiran, perihal, kepada, 
-        tanggalAcara, waktuMulai, waktuSelesai, tempat, agenda 
+        nomorSurat, lampiran, perihal, 
+        tanggalAcara, tempat, agenda,
+        list_tamu,
+        // Ambil waktuMulai, tapi kalau kosong coba ambil waktuAcara (Fallback)
+        waktuMulai, waktuAcara, waktuSelesai 
     } = data;
 
-    // --- BAGIAN PENTING: FORCE TEMPLATE ---
-    // Kita paksa backend menggunakan file ini, apapun jenis suratnya.
-    // Pastikan file 'template_undangan.docx' ada di folder templates.
-    let templateName = 'template_undangan.docx'; 
-
-    // 2. Format Data Waktu
+    // 2. Logic Format Tanggal
+    // Cek apakah tanggalAcara ada?
     const hari_acara = getNamaHari(tanggalAcara);
     const tgl_acara = formatTanggalIndo(tanggalAcara);
     const today_indo = formatTanggalIndo(new Date());
-    
-    // Format Jam
-    let waktu_fix = `${waktuMulai} WIB - Selesai`;
-    if (waktuSelesai) {
-        waktu_fix = `${waktuMulai} - ${waktuSelesai} WIB`;
+
+    // 3. Logic Format Waktu (Perbaikan)
+    // Kita prioritaskan waktuMulai, kalau ga ada pakai waktuAcara
+    const jamMulai = waktuMulai || waktuAcara; 
+    let waktu_fix = "-";
+
+    if (jamMulai) {
+        if (waktuSelesai) {
+             waktu_fix = `${jamMulai} - ${waktuSelesai} WIB`;
+        } else {
+             // Hilangkan kata "Selesai" sesuai request
+             waktu_fix = `${jamMulai} WIB`; 
+        }
     }
 
-    // 3. Masukkan Data ke Word
+    // ... Logic List Tamu (Biarkan seperti sebelumnya) ...
+    let listTamuReady = [];
+    if (list_tamu && Array.isArray(list_tamu)) {
+        listTamuReady = list_tamu.map(tamu => 
+            typeof tamu === 'string' ? { nama: tamu } : tamu
+        );
+    }
+
+    // 4. Masukkan ke Context
     const context = {
         nomor_surat: nomorSurat || "XXX/UND/FI/2025",
         lampiran: lampiran || "-",
         perihal: perihal || "Undangan",
-        kepada: kepada, 
-        hari: hari_acara,
-        tanggal: tgl_acara,
-        waktu: waktu_fix,
-        tempat: tempat,
-        agenda: agenda,
-        tanggal_surat: today_indo
+        
+        hari: hari_acara,     // Cek hasil ini di file output
+        tanggal: tgl_acara,   // Cek hasil ini di file output
+        waktu: waktu_fix,     // Cek hasil ini di file output
+        
+        tempat: tempat || "-",
+        agenda: agenda || "-",
+        tanggal_surat: today_indo,
+        list_tamu: listTamuReady
     };
 
-    // 4. Generate File
+    // ... Generate File (Generate Docx/PDF) ...
+    // Copy bagian bawah service.js kamu yang lama ke sini
+    const templateName = 'template_undangan.docx'; 
     const docxBuffer = generateWordFile(templateName, context);
-
+    
+    // ... Logic return PDF/DOCX ...
     let finalBuffer = docxBuffer;
     let mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
     let ext = 'docx';
+    let fileName = `Undangan_${Date.now()}.${ext}`;
 
     if (format === 'pdf') {
         finalBuffer = await generatePdfFile(docxBuffer);
         mimeType = 'application/pdf';
         ext = 'pdf';
     }
-
-    const cleanPerihal = (perihal || 'Surat').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20);
-    const fileName = `Undangan_${cleanPerihal}_${Date.now()}.${ext}`;
 
     return { buffer: finalBuffer, fileName, mimeType };
 };
