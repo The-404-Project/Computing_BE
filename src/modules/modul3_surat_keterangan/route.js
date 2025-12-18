@@ -4,7 +4,7 @@ const controller = require('./controller')
 const router = Router()
 
 router.get('/mahasiswa', controller.getMahasiswaByNim)
-router.post('/surat-keterangan/aktif/generate', controller.generateSuratKeteranganAktif)
-router.post('/surat-keterangan/generate', controller.generateSuratKeterangan)
+router.post('/aktif/generate', controller.generateSuratKeteranganAktif)
+router.post('/generate', controller.generateSuratKeterangan)
 
 module.exports = router

@@ -70,31 +70,38 @@ async function generateSuratKeteranganAktif(req, res) {
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true })
     }
+    const desiredName = `surat_keterangan_${String(nomor_surat)}.docx`
+    const desiredPath = path.join(outputDir, desiredName)
+    if (fs.existsSync(desiredPath)) {
+      return res.status(409).json({ message: `Surat dengan nomor registrasi ${nomor_surat} sudah ada`, file: desiredName })
+    }
     const content = fs.readFileSync(templatePath, 'binary')
     const zip = new PizZip(content)
     const doc = new Docxtemplater(zip, {delimiters: {
     start: '<<<',
     end: '>>>',
   }, paragraphLoop: true, linebreaks: true })
-    doc.render({
-      nomor_surat: nomor_surat || '',
-      nama: m.nama,
-      nim: m.nim,
-      program_studi: m.prodi,
-      tahun_akademik: tahunAkademik,
-      status,
-      keperluan: keperluan || '',
-      kota: kota || '',
-      tanggal: tanggal || '',
-      nama_dekan: nama_dekan || '',
-      nip_dekan: nip_dekan || '',
-    })
+    try {
+      doc.render({
+        nomor_surat: nomor_surat || '',
+        nama: m.nama,
+        nim: m.nim,
+        program_studi: m.prodi,
+        tahun_akademik: tahunAkademik,
+        status,
+        keperluan: keperluan || '',
+        kota: kota || '',
+        tanggal: tanggal || '',
+        nama_dekan: nama_dekan || '',
+        nip_dekan: nip_dekan || '',
+      })
+    } catch (err) {
+      return res.status(400).json({ message: 'Template gagal dirender' })
+    }
     const buf = doc.getZip().generate({ type: 'nodebuffer' })
-    const filename = `surat_keterangan_aktif_${m.nim}_${Date.now()}.docx`
-    const filePath = path.join(outputDir, filename)
-    fs.writeFileSync(filePath, buf)
-    await service.createDokumen({ nomor_registrasi: String(nomor_surat), nim: String(m.nim), jenis_surat: 'surat keterangan aktif kuliah', file_name: filename })
-    return res.json({ message: 'Dokumen berhasil dibuat', file: filename })
+    fs.writeFileSync(desiredPath, buf)
+    await service.createDokumen({ nomor_registrasi: String(nomor_surat), nim: String(m.nim), jenis_surat: 'surat keterangan aktif kuliah', file_name: desiredName })
+    return res.json({ message: 'Dokumen berhasil dibuat', file: desiredName })
   } catch (e) {
     return res.status(500).json({ message: 'Kesalahan server' })
   }
@@ -151,28 +158,35 @@ async function generateSuratKeterangan(req, res) {
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true })
     }
+    const desiredName = `surat_keterangan_${String(body.nomor_surat)}.docx`
+    const desiredPath = path.join(outputDir, desiredName)
+    if (fs.existsSync(desiredPath)) {
+      return res.status(409).json({ message: `Surat dengan nomor registrasi ${body.nomor_surat} sudah ada`, file: desiredName })
+    }
     const content = fs.readFileSync(templatePath, 'binary')
     const zip = new PizZip(content)
     const doc = new Docxtemplater(zip, { delimiters: { start: '<<<', end: '>>>' }, paragraphLoop: true, linebreaks: true })
-    doc.render({
-      nomor_surat: body.nomor_surat || '',
-      nama: m.nama,
-      nim: m.nim,
-      program_studi: m.prodi,
-      tahun_akademik: tahunAkademik,
-      status,
-      keperluan: body.keperluan || '',
-      kota: body.kota || '',
-      tanggal: body.tanggal || '',
-      nama_dekan: body.nama_dekan || '',
-      nip_dekan: body.nip_dekan || '',
-    })
+    try {
+      doc.render({
+        nomor_surat: body.nomor_surat || '',
+        nama: m.nama,
+        nim: m.nim,
+        program_studi: m.prodi,
+        tahun_akademik: tahunAkademik,
+        status,
+        keperluan: body.keperluan || '',
+        kota: body.kota || '',
+        tanggal: body.tanggal || '',
+        nama_dekan: body.nama_dekan || '',
+        nip_dekan: body.nip_dekan || '',
+      })
+    } catch (err) {
+      return res.status(400).json({ message: 'Template gagal dirender' })
+    }
     const buf = doc.getZip().generate({ type: 'nodebuffer' })
-    const outName = `surat_keterangan_${m.nim}_${Date.now()}.docx`
-    const outPath = path.join(outputDir, outName)
-    fs.writeFileSync(outPath, buf)
-    await service.createDokumen({ nomor_registrasi: String(body.nomor_surat), nim: String(m.nim), jenis_surat: key, file_name: outName })
-    return res.json({ message: 'Dokumen berhasil dibuat', file: outName })
+    fs.writeFileSync(desiredPath, buf)
+    await service.createDokumen({ nomor_registrasi: String(body.nomor_surat), nim: String(m.nim), jenis_surat: key, file_name: desiredName })
+    return res.json({ message: 'Dokumen berhasil dibuat', file: desiredName })
   } catch (e) {
     return res.status(500).json({ message: 'Kesalahan server' })
   }

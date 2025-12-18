@@ -1,56 +1,68 @@
-CREATE DATABASE IF NOT EXISTS DB_PersuratanFakultas;
+-- ============================================
+-- DATABASE SCHEMA - SIPENA System
+-- ============================================
 
-USE DB_PersuratanFakultas;
-
+CREATE DATABASE IF NOT EXISTS db_persuratanfakultas;
+USE db_persuratanfakultas;
+-- ============================================
+-- TABLE: users
+-- ============================================
 CREATE TABLE IF NOT EXISTS users (
-    user_id INT PRIMARY KEY AUTO_INCREMENT,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    full_name VARCHAR(100),
-    email VARCHAR(100),
-    role ENUM('admin', 'staff', 'kaprodi', 'dekan'),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+  user_id INT(11) NOT NULL AUTO_INCREMENT,
+  username VARCHAR(50) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  role ENUM('admin', 'staff', 'kaprodi', 'dekan') DEFAULT 'staff',
+  full_name VARCHAR(100) DEFAULT NULL,
+  email VARCHAR(100) DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id),
+  UNIQUE KEY uk_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-CREATE TABLE IF NOT EXISTS templates (
-    template_id INT PRIMARY KEY AUTO_INCREMENT,
-    template_name VARCHAR(100),
-    template_type VARCHAR(50),
-    file_content LONGBLOB,
-    variables JSON,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
-
-CREATE TABLE IF NOT EXISTS documents (
-    doc_id INT PRIMARY KEY AUTO_INCREMENT,
-    doc_number VARCHAR(50) UNIQUE,
-    doc_type VARCHAR(50),
-    template_id INT,
-    created_by INT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status ENUM('draft', 'approved', 'sent'),
-    file_path VARCHAR(255),
-    metadata JSON,
-    FOREIGN KEY (created_by) REFERENCES users(user_id),
-    FOREIGN KEY (template_id) REFERENCES templates(template_id)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
-
+-- ============================================
+-- TABLE: mahasiswa
+-- ============================================
 CREATE TABLE IF NOT EXISTS mahasiswa (
-    nim VARCHAR(20) PRIMARY KEY,
-    nama VARCHAR(100),
-    prodi VARCHAR(50),
-    angkatan INT,
-    status ENUM('aktif', 'cuti', 'lulus', 'keluar'),
-    email VARCHAR(100)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+  nim VARCHAR(20) NOT NULL,
+  nama VARCHAR(100) DEFAULT NULL,
+  prodi VARCHAR(50) DEFAULT NULL,
+  angkatan INT(11) DEFAULT NULL,
+  status ENUM('aktif', 'cuti', 'lulus', 'keluar') DEFAULT NULL,
+  email VARCHAR(100) DEFAULT NULL,
+  PRIMARY KEY (nim)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-CREATE TABLE IF NOT EXISTS dokumen_surat (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    nomor_registrasi VARCHAR(100) NOT NULL UNIQUE,
-    nim VARCHAR(20) NOT NULL,
-    jenis_surat VARCHAR(100) NOT NULL,
-    file_name VARCHAR(255) NOT NULL,
-    generated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_dokumen_mahasiswa FOREIGN KEY (nim) REFERENCES mahasiswa(nim)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+-- ============================================
+-- TABLE: documents
+-- ============================================
+CREATE TABLE IF NOT EXISTS documents (
+  id INT(11) NOT NULL AUTO_INCREMENT,
+  doc_number VARCHAR(255) NOT NULL,
+  doc_type VARCHAR(255) NOT NULL DEFAULT 'general',
+  status VARCHAR(255) DEFAULT 'draft',
+  metadata LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
+  file_path VARCHAR(255) DEFAULT NULL,
+  created_by INT(11) DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_created_by (created_by),
+  CONSTRAINT fk_documents_created_by FOREIGN KEY (created_by) REFERENCES users (user_id) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ============================================
+-- TABLE: templates (Sesuai SRS)
+-- ============================================
+CREATE TABLE IF NOT EXISTS templates (
+  template_id INT(11) NOT NULL AUTO_INCREMENT,
+  template_name VARCHAR(100) NOT NULL,
+  template_type VARCHAR(50) NOT NULL,
+  file_path VARCHAR(255) NOT NULL,
+  variables LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
+  description TEXT DEFAULT NULL,
+  is_active TINYINT(1) DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (template_id),
+  KEY idx_template_type (template_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
