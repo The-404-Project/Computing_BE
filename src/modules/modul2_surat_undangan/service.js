@@ -19,12 +19,12 @@ const formatTanggalIndo = (dateString) => {
 
 const processSuratUndangan = async (data, format = 'docx') => {
     // 1. Destructure Data
-    const { 
-        nomorSurat, lampiran, perihal, 
+    const {
+        nomorSurat, lampiran, perihal,
         tanggalAcara, tempat, agenda,
         list_tamu,
         // Ambil waktuMulai, tapi kalau kosong coba ambil waktuAcara (Fallback)
-        waktuMulai, waktuAcara, waktuSelesai 
+        waktuMulai, waktuAcara, waktuSelesai
     } = data;
 
     // 2. Logic Format Tanggal
@@ -35,24 +35,35 @@ const processSuratUndangan = async (data, format = 'docx') => {
 
     // 3. Logic Format Waktu (Perbaikan)
     // Kita prioritaskan waktuMulai, kalau ga ada pakai waktuAcara
-    const jamMulai = waktuMulai || waktuAcara; 
+    const jamMulai = waktuMulai || waktuAcara;
     let waktu_fix = "-";
 
     if (jamMulai) {
         if (waktuSelesai) {
-             waktu_fix = `${jamMulai} - ${waktuSelesai} WIB`;
+            waktu_fix = `${jamMulai} - ${waktuSelesai} WIB`;
         } else {
-             // Hilangkan kata "Selesai" sesuai request
-             waktu_fix = `${jamMulai} WIB`; 
+            // Hilangkan kata "Selesai" sesuai request
+            waktu_fix = `${jamMulai} WIB`;
         }
     }
 
     // ... Logic List Tamu (Biarkan seperti sebelumnya) ...
     let listTamuReady = [];
     if (list_tamu && Array.isArray(list_tamu)) {
-        listTamuReady = list_tamu.map(tamu => 
-            typeof tamu === 'string' ? { nama: tamu } : tamu
-        );
+        listTamuReady = list_tamu.map((tamu, index) => {
+            const namaTamu = typeof tamu === 'string' ? tamu : tamu.nama;
+
+            // Cek apakah ini orang terakhir?
+            const isLastItem = index === list_tamu.length - 1;
+
+            return {
+                nama: namaTamu,
+                // GANTI LOGIC DI SINI:
+                // Kita kirim 'showPageBreak' bernilai TRUE jika bukan terakhir.
+                // Jika terakhir, nilainya FALSE.
+                showPageBreak: !isLastItem
+            };
+        });
     }
 
     // 4. Masukkan ke Context
@@ -60,11 +71,11 @@ const processSuratUndangan = async (data, format = 'docx') => {
         nomor_surat: nomorSurat || "XXX/UND/FI/2025",
         lampiran: lampiran || "-",
         perihal: perihal || "Undangan",
-        
+
         hari: hari_acara,     // Cek hasil ini di file output
         tanggal: tgl_acara,   // Cek hasil ini di file output
         waktu: waktu_fix,     // Cek hasil ini di file output
-        
+
         tempat: tempat || "-",
         agenda: agenda || "-",
         tanggal_surat: today_indo,
@@ -73,9 +84,9 @@ const processSuratUndangan = async (data, format = 'docx') => {
 
     // ... Generate File (Generate Docx/PDF) ...
     // Copy bagian bawah service.js kamu yang lama ke sini
-    const templateName = 'template_undangan.docx'; 
+    const templateName = 'template_undangan.docx';
     const docxBuffer = generateWordFile(templateName, context);
-    
+
     // ... Logic return PDF/DOCX ...
     let finalBuffer = docxBuffer;
     let mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
