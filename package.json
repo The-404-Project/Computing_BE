@@ -28,8 +28,10 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "docxtemplater": "^3.67.6",
     "express": "^5.1.0",
     "mysql2": "^3.11.3",
+    "pizzip": "^3.2.0",
     "sequelize": "^6.37.7"
   }
 }

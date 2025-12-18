@@ -1,4 +1,5 @@
 const express = require('express')
+const path = require('path')
 const modul3Router = require('./modules/modul3_surat_keterangan/route')
 
 const app = express()
@@ -14,6 +15,8 @@ app.use((req, res, next) => {
 })
 
 app.use(express.json())
+
+app.use('/files', express.static(path.join(__dirname, '../output/generated_documents')))
 
 app.use('/api', modul3Router)
 
