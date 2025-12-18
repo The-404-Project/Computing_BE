@@ -565,6 +565,307 @@ const exportHistory = async (req, res) => {
   }
 };
 
+// ============================================
+// TEMPLATE MANAGEMENT
+// ============================================
+
+// Get All Templates
+const getAllTemplates = async (req, res) => {
+  try {
+    const Template = require('../../models/Template');
+    const { template_type = '', is_active = '' } = req.query;
+
+    const whereClause = {};
+    if (template_type) {
+      whereClause.template_type = template_type;
+    }
+    if (is_active !== '') {
+      whereClause.is_active = is_active === 'true';
+    }
+
+    const templates = await Template.findAll({
+      where: whereClause,
+      order: [['created_at', 'DESC']],
+    });
+
+    res.json({ templates });
+  } catch (error) {
+    console.error('Get Templates Error:', error);
+    res.status(500).json({ message: 'Gagal mengambil data templates' });
+  }
+};
+
+// Get Template by ID
+const getTemplateById = async (req, res) => {
+  try {
+    const Template = require('../../models/Template');
+    const { id } = req.params;
+
+    const template = await Template.findOne({ where: { template_id: parseInt(id) } });
+    if (!template) {
+      return res.status(404).json({ message: 'Template tidak ditemukan' });
+    }
+
+    res.json({ template });
+  } catch (error) {
+    console.error('Get Template Error:', error);
+    res.status(500).json({ message: 'Gagal mengambil data template' });
+  }
+};
+
+// Create Template
+const createTemplate = async (req, res) => {
+  try {
+    const Template = require('../../models/Template');
+    const fs = require('fs');
+    const path = require('path');
+
+    const { template_name, template_type, description, variables, is_active = true } = req.body;
+
+    // Validasi
+    if (!template_name || !template_type) {
+      return res.status(400).json({ message: 'Template name dan template type wajib diisi' });
+    }
+
+    // Handle file upload (if provided)
+    let file_path = null;
+    if (req.file) {
+      const uploadDir = path.resolve(__dirname, '../../templates/surat_templates');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+
+      const fileName = `${Date.now()}_${req.file.originalname}`;
+      file_path = path.join(uploadDir, fileName);
+      fs.writeFileSync(file_path, req.file.buffer);
+
+      // Update file_path to relative path
+      file_path = `src/templates/surat_templates/${fileName}`;
+    } else {
+      return res.status(400).json({ message: 'File template wajib diupload' });
+    }
+
+    // Parse variables if string
+    let variablesObj = variables;
+    if (typeof variables === 'string') {
+      try {
+        variablesObj = JSON.parse(variables);
+      } catch (e) {
+        variablesObj = null;
+      }
+    }
+
+    // Create template
+    const template = await Template.create({
+      template_name,
+      template_type,
+      file_path,
+      variables: variablesObj,
+      description: description || null,
+      is_active: is_active === true || is_active === 'true',
+    });
+
+    res.status(201).json({
+      message: 'Template berhasil dibuat',
+      template: {
+        template_id: template.template_id,
+        template_name: template.template_name,
+        template_type: template.template_type,
+        file_path: template.file_path,
+        variables: template.variables,
+        description: template.description,
+        is_active: template.is_active,
+      },
+    });
+  } catch (error) {
+    console.error('Create Template Error:', error);
+    res.status(500).json({ message: 'Gagal membuat template: ' + error.message });
+  }
+};
+
+// Update Template
+const updateTemplate = async (req, res) => {
+  try {
+    const Template = require('../../models/Template');
+    const fs = require('fs');
+    const path = require('path');
+
+    const { id } = req.params;
+    const { template_name, template_type, description, variables, is_active } = req.body;
+
+    const template = await Template.findOne({ where: { template_id: parseInt(id) } });
+    if (!template) {
+      return res.status(404).json({ message: 'Template tidak ditemukan' });
+    }
+
+    // Update fields
+    if (template_name) template.template_name = template_name;
+    if (template_type) template.template_type = template_type;
+    if (description !== undefined) template.description = description || null;
+    if (is_active !== undefined) template.is_active = is_active === true || is_active === 'true';
+
+    // Parse variables if string
+    if (variables !== undefined) {
+      if (typeof variables === 'string') {
+        try {
+          template.variables = JSON.parse(variables);
+        } catch (e) {
+          template.variables = null;
+        }
+      } else {
+        template.variables = variables;
+      }
+    }
+
+    // Handle file upload (if provided)
+    if (req.file) {
+      // Delete old file if exists
+      if (template.file_path) {
+        const oldFilePath = path.resolve(__dirname, '../../', template.file_path);
+        if (fs.existsSync(oldFilePath)) {
+          try {
+            fs.unlinkSync(oldFilePath);
+          } catch (e) {
+            console.warn('Failed to delete old file:', e);
+          }
+        }
+      }
+
+      // Save new file
+      const uploadDir = path.resolve(__dirname, '../../templates/surat_templates');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+
+      const fileName = `${Date.now()}_${req.file.originalname}`;
+      const newFilePath = path.join(uploadDir, fileName);
+      fs.writeFileSync(newFilePath, req.file.buffer);
+
+      template.file_path = `src/templates/surat_templates/${fileName}`;
+    }
+
+    await template.save();
+
+    res.json({
+      message: 'Template berhasil diupdate',
+      template: {
+        template_id: template.template_id,
+        template_name: template.template_name,
+        template_type: template.template_type,
+        file_path: template.file_path,
+        variables: template.variables,
+        description: template.description,
+        is_active: template.is_active,
+      },
+    });
+  } catch (error) {
+    console.error('Update Template Error:', error);
+    res.status(500).json({ message: 'Gagal mengupdate template: ' + error.message });
+  }
+};
+
+// Delete Template
+const deleteTemplate = async (req, res) => {
+  try {
+    const Template = require('../../models/Template');
+    const fs = require('fs');
+    const path = require('path');
+
+    const { id } = req.params;
+
+    const template = await Template.findOne({ where: { template_id: parseInt(id) } });
+    if (!template) {
+      return res.status(404).json({ message: 'Template tidak ditemukan' });
+    }
+
+    // Delete file if exists
+    if (template.file_path) {
+      const filePath = path.resolve(__dirname, '../../', template.file_path);
+      if (fs.existsSync(filePath)) {
+        try {
+          fs.unlinkSync(filePath);
+        } catch (e) {
+          console.warn('Failed to delete template file:', e);
+        }
+      }
+    }
+
+    await template.destroy();
+
+    res.json({ message: 'Template berhasil dihapus' });
+  } catch (error) {
+    console.error('Delete Template Error:', error);
+    res.status(500).json({ message: 'Gagal menghapus template: ' + error.message });
+  }
+};
+
+// Toggle Template Active Status
+const toggleTemplateActive = async (req, res) => {
+  try {
+    const Template = require('../../models/Template');
+    const { id } = req.params;
+
+    const template = await Template.findOne({ where: { template_id: parseInt(id) } });
+    if (!template) {
+      return res.status(404).json({ message: 'Template tidak ditemukan' });
+    }
+
+    template.is_active = !template.is_active;
+    await template.save();
+
+    res.json({
+      message: `Template berhasil ${template.is_active ? 'diaktifkan' : 'dinonaktifkan'}`,
+      template: {
+        template_id: template.template_id,
+        template_name: template.template_name,
+        is_active: template.is_active,
+      },
+    });
+  } catch (error) {
+    console.error('Toggle Template Active Error:', error);
+    res.status(500).json({ message: 'Gagal mengubah status template: ' + error.message });
+  }
+};
+
+// Preview/Download Template File
+const previewTemplate = async (req, res) => {
+  try {
+    const Template = require('../../models/Template');
+    const fs = require('fs');
+    const path = require('path');
+
+    const { id } = req.params;
+
+    const template = await Template.findOne({ where: { template_id: parseInt(id) } });
+    if (!template) {
+      return res.status(404).json({ message: 'Template tidak ditemukan' });
+    }
+
+    // Get file path
+    const filePath = path.resolve(__dirname, '../../', template.file_path);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'File template tidak ditemukan' });
+    }
+
+    // Read file
+    const fileBuffer = fs.readFileSync(filePath);
+    const fileName = path.basename(template.file_path);
+
+    // Set headers for file download
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'Content-Disposition': `attachment; filename="${fileName}"`,
+      'Content-Length': fileBuffer.length,
+    });
+
+    res.send(fileBuffer);
+  } catch (error) {
+    console.error('Preview Template Error:', error);
+    res.status(500).json({ message: 'Gagal mengambil file template: ' + error.message });
+  }
+};
+
 module.exports = {
   login,
   getAllUsers,
@@ -576,4 +877,11 @@ module.exports = {
   getDocumentStats,
   downloadDocument,
   exportHistory,
+  getAllTemplates,
+  getTemplateById,
+  createTemplate,
+  updateTemplate,
+  deleteTemplate,
+  toggleTemplateActive,
+  previewTemplate,
 };
