@@ -40,7 +40,17 @@ const getAllUsers = async (req, res) => {
       attributes: { exclude: ['password_hash'] },
       order: [['created_at', 'DESC']],
     });
-    res.json({ users });
+
+    // Map users to include id field
+    const usersWithId = users.map((user) => ({
+      id: user.user_id,
+      username: user.username,
+      role: user.role,
+      full_name: user.full_name,
+      email: user.email,
+    }));
+
+    res.json({ users: usersWithId });
   } catch (error) {
     console.error('Get Users Error:', error);
     res.status(500).json({ message: 'Gagal mengambil data users' });
@@ -51,13 +61,22 @@ const getAllUsers = async (req, res) => {
 const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
-    const user = await User.findByPk(id, {
+    const user = await User.findOne({
+      where: { user_id: parseInt(id) },
       attributes: { exclude: ['password_hash'] },
     });
     if (!user) {
       return res.status(404).json({ message: 'User tidak ditemukan' });
     }
-    res.json({ user });
+    res.json({
+      user: {
+        id: user.user_id,
+        username: user.username,
+        role: user.role,
+        full_name: user.full_name,
+        email: user.email,
+      },
+    });
   } catch (error) {
     console.error('Get User Error:', error);
     res.status(500).json({ message: 'Gagal mengambil data user' });
@@ -115,24 +134,38 @@ const updateUser = async (req, res) => {
     const { id } = req.params;
     const { username, password, role, full_name, email } = req.body;
 
-    const user = await User.findByPk(id);
+    console.log('Update User - ID:', id, 'Body:', { username, role, full_name, email, hasPassword: !!password });
+
+    // Cari user berdasarkan user_id (primary key)
+    const user = await User.findOne({ where: { user_id: parseInt(id) } });
     if (!user) {
+      console.log('User not found with ID:', id);
       return res.status(404).json({ message: 'User tidak ditemukan' });
     }
 
-    // Update fields
-    if (username) user.username = username;
-    if (role) user.role = role;
-    if (full_name !== undefined) user.full_name = full_name;
-    if (email !== undefined) user.email = email;
+    // Validasi username jika diubah
+    if (username && username !== user.username) {
+      const existingUser = await User.findOne({ where: { username } });
+      if (existingUser && existingUser.user_id !== user.user_id) {
+        return res.status(400).json({ message: 'Username sudah digunakan' });
+      }
+      user.username = username;
+    }
 
-    // Update password jika ada
-    if (password) {
+    // Update fields
+    if (role) user.role = role;
+    if (full_name !== undefined) user.full_name = full_name || null;
+    if (email !== undefined) user.email = email || null;
+
+    // Update password jika ada dan tidak kosong
+    if (password && password.trim() !== '') {
       const salt = await bcrypt.genSalt(10);
       user.password_hash = await bcrypt.hash(password, salt);
     }
 
     await user.save();
+
+    console.log('User updated successfully:', user.user_id);
 
     res.json({
       message: 'User berhasil diupdate',
@@ -146,7 +179,10 @@ const updateUser = async (req, res) => {
     });
   } catch (error) {
     console.error('Update User Error:', error);
-    res.status(500).json({ message: 'Gagal mengupdate user' });
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({ message: 'Username sudah digunakan' });
+    }
+    res.status(500).json({ message: 'Gagal mengupdate user: ' + error.message });
   }
 };
 
@@ -155,8 +191,12 @@ const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const user = await User.findByPk(id);
+    console.log('Delete User - ID:', id);
+
+    // Cari user berdasarkan user_id (primary key)
+    const user = await User.findOne({ where: { user_id: parseInt(id) } });
     if (!user) {
+      console.log('User not found with ID:', id);
       return res.status(404).json({ message: 'User tidak ditemukan' });
     }
 
@@ -165,10 +205,15 @@ const deleteUser = async (req, res) => {
 
     await user.destroy();
 
+    console.log('User deleted successfully:', id);
+
     res.json({ message: 'User berhasil dihapus' });
   } catch (error) {
     console.error('Delete User Error:', error);
-    res.status(500).json({ message: 'Gagal menghapus user' });
+    if (error.name === 'SequelizeForeignKeyConstraintError') {
+      return res.status(400).json({ message: 'User tidak dapat dihapus karena masih memiliki data terkait' });
+    }
+    res.status(500).json({ message: 'Gagal menghapus user: ' + error.message });
   }
 };
 
