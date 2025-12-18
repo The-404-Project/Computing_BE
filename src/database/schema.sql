@@ -10,14 +10,27 @@ USE db_persuratanfakultas;
 -- ============================================
 CREATE TABLE IF NOT EXISTS users (
   user_id INT(11) NOT NULL AUTO_INCREMENT,
-  username VARCHAR(50) UNIQUE NOT NULL,
+  username VARCHAR(50) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   role ENUM('admin', 'staff', 'kaprodi', 'dekan') DEFAULT 'staff',
-  full_name VARCHAR(100),
-  email VARCHAR(100),
+  full_name VARCHAR(100) DEFAULT NULL,
+  email VARCHAR(100) DEFAULT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (user_id),
-  UNIQUE KEY username (username)
+  UNIQUE KEY uk_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ============================================
+-- TABLE: mahasiswa
+-- ============================================
+CREATE TABLE IF NOT EXISTS mahasiswa (
+  nim VARCHAR(20) NOT NULL,
+  nama VARCHAR(100) DEFAULT NULL,
+  prodi VARCHAR(50) DEFAULT NULL,
+  angkatan INT(11) DEFAULT NULL,
+  status ENUM('aktif', 'cuti', 'lulus', 'keluar') DEFAULT NULL,
+  email VARCHAR(100) DEFAULT NULL,
+  PRIMARY KEY (nim)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ============================================
@@ -28,27 +41,14 @@ CREATE TABLE IF NOT EXISTS documents (
   doc_number VARCHAR(255) NOT NULL,
   doc_type VARCHAR(255) NOT NULL DEFAULT 'general',
   status VARCHAR(255) DEFAULT 'draft',
-  metadata LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(metadata)),
+  metadata LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
   file_path VARCHAR(255) DEFAULT NULL,
   created_by INT(11) DEFAULT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  KEY created_by (created_by),
-  CONSTRAINT documents_ibfk_1 FOREIGN KEY (created_by) REFERENCES users (user_id) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- ============================================
--- TABLE: mahasiswa
--- ============================================
-CREATE TABLE IF NOT EXISTS mahasiswa (
-  nim VARCHAR(20) NOT NULL,
-  nama VARCHAR(100),
-  prodi VARCHAR(50),
-  angkatan INT(11),
-  status ENUM('aktif', 'cuti', 'lulus', 'keluar'),
-  email VARCHAR(100),
-  PRIMARY KEY (nim)
+  KEY idx_created_by (created_by),
+  CONSTRAINT fk_documents_created_by FOREIGN KEY (created_by) REFERENCES users (user_id) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ============================================
@@ -59,11 +59,11 @@ CREATE TABLE IF NOT EXISTS templates (
   template_name VARCHAR(100) NOT NULL,
   template_type VARCHAR(50) NOT NULL,
   file_path VARCHAR(255) NOT NULL,
-  variables JSON DEFAULT NULL,
-  description TEXT,
-  is_active BOOLEAN DEFAULT TRUE,
+  variables LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
+  description TEXT DEFAULT NULL,
+  is_active TINYINT(1) DEFAULT 1,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (template_id),
-  KEY template_type (template_type)
+  KEY idx_template_type (template_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
