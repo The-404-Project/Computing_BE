@@ -22,64 +22,64 @@ const generateNomorSurat = async () => {
 };
 
 const create = async (req, res) => {
-  try {
-    const { nomorSurat, perihal, kepada, tanggalAcara, tempat, list_tamu, agenda } = req.body;
-    const user_id = req.user ? req.user.user_id : 1;
-
-    let finalNomorSurat = nomorSurat;
-    if (!finalNomorSurat) {
-      finalNomorSurat = await generateNomorSurat();
-    }
-
-    const requestedFormat = req.query.format || 'docx';
-    const payload = {
-      ...req.body,
-      nomorSurat: finalNomorSurat,
-      list_tamu: list_tamu,
-    };
-
-    // 1. Panggil Service (Sekarang service mengembalikan filePath juga)
-    const result = await undanganService.processSuratUndangan(payload, requestedFormat);
-
-    // 2. Simpan ke Database
     try {
-      await Document.create({
-        doc_number: finalNomorSurat,
-        doc_type: 'surat_undangan',
-        status: 'generated',
-        created_by: user_id,
-        // SIMPAN PATH FILE FISIK DI SINI
-        file_path: result.filePath, 
-        metadata: {
-          perihal,
-          kepada_display: kepada, 
-          list_tamu_json: list_tamu,
-          tanggal_acara: tanggalAcara,
-          tempat,
-          agenda,
-          generated_filename: result.fileName,
-        },
-      });
-      console.log(`[Modul 2] Document saved to database: ${finalNomorSurat}`);
-    } catch (dbError) {
-      console.error('[Modul 2] Error saving to database:', dbError);
+        const { nomorSurat, perihal, kepada, tanggalAcara, tempat, list_tamu, agenda } = req.body;
+        const user_id = req.user ? req.user.user_id : 1;
+
+        let finalNomorSurat = nomorSurat; // isinya ""
+        if (!finalNomorSurat) {
+            finalNomorSurat = await generateNomorSurat(); // TRIGGERED ✅
+        }
+
+        const requestedFormat = req.query.format || 'docx';
+        const payload = {
+            ...req.body,
+            nomorSurat: finalNomorSurat,
+            list_tamu: list_tamu,
+        };
+
+        // 1. Panggil Service (Sekarang service mengembalikan filePath juga)
+        const result = await undanganService.processSuratUndangan(payload, requestedFormat);
+
+        // 2. Simpan ke Database
+        try {
+            await Document.create({
+                doc_number: finalNomorSurat,
+                doc_type: 'surat_undangan',
+                status: 'generated',
+                created_by: user_id,
+                // SIMPAN PATH FILE FISIK DI SINI
+                file_path: result.filePath,
+                metadata: {
+                    perihal,
+                    kepada_display: kepada,
+                    list_tamu_json: list_tamu,
+                    tanggal_acara: tanggalAcara,
+                    tempat,
+                    agenda,
+                    generated_filename: result.fileName,
+                },
+            });
+            console.log(`[Modul 2] Document saved to database: ${finalNomorSurat}`);
+        } catch (dbError) {
+            console.error('[Modul 2] Error saving to database:', dbError);
+        }
+
+        // 3. Kirim File ke User
+        res.set({
+            'Content-Type': result.mimeType,
+            'Content-Disposition': `attachment; filename=${result.fileName}`,
+            'Content-Length': result.buffer.length,
+        });
+
+        res.send(result.buffer);
+    } catch (error) {
+        console.error('Error Modul 2:', error);
+        res.status(500).json({
+            message: 'Gagal membuat undangan',
+            error: error.message,
+        });
     }
-
-    // 3. Kirim File ke User
-    res.set({
-      'Content-Type': result.mimeType,
-      'Content-Disposition': `attachment; filename=${result.fileName}`,
-      'Content-Length': result.buffer.length,
-    });
-
-    res.send(result.buffer);
-  } catch (error) {
-    console.error('Error Modul 2:', error);
-    res.status(500).json({
-      message: 'Gagal membuat undangan',
-      error: error.message,
-    });
-  }
 };
 
 module.exports = { create };

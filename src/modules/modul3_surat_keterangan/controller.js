@@ -108,13 +108,22 @@ async function generateSuratKeterangan(req, res) {
     // Mock User ID (Nanti ganti dengan req.user.id dari middleware auth)
     const user_id = req.user ? req.user.user_id : 1;
 
-    // Simpan ke database
+    // Simpan ke database dengan semua metadata yang diperlukan
     await service.createDokumen({
       nomor_registrasi: String(body.nomor_surat),
       nim: String(m.nim),
       jenis_surat: key,
       file_name: desiredName,
       created_by: user_id,
+      nama: m.nama,
+      program_studi: m.prodi,
+      tahun_akademik: tahunAkademik,
+      status_mahasiswa: status,
+      keperluan: body.keperluan || '',
+      kota: body.kota || '',
+      tanggal: body.tanggal || '',
+      nama_dekan: body.nama_dekan || '',
+      nip_dekan: body.nip_dekan || '',
     });
 
     return res.json({ message: 'Dokumen berhasil dibuat', file: desiredName });
