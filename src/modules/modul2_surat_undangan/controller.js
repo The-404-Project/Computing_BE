@@ -24,7 +24,6 @@ const generateNomorSurat = async () => {
 
 const create = async (req, res) => {
     try {
-        console.log("📥 [DEBUG] Data Masuk dari FE:", JSON.stringify(req.body, null, 2));
         // Ambil data dari Body (Termasuk list_tamu array)
         const { nomorSurat, perihal, kepada, tanggalAcara, tempat, list_tamu, agenda } = req.body;
         
