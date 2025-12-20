@@ -40,6 +40,26 @@ async function generateSuratKeterangan(req, res) {
   if (!body.nomor_surat) {
     return res.status(400).json({ message: 'nomor_surat required' });
   }
+  // Ambil user dari token jika tersedia
+  let currentUserName = null;
+  let currentUserRole = null;
+  try {
+    const authHeader = req.headers.authorization || '';
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.slice(7);
+      const jwt = require('jsonwebtoken');
+      const { SECRET_KEY } = require('../../utils/auth');
+      const decoded = jwt.verify(token, SECRET_KEY);
+      if (decoded) {
+        currentUserRole = decoded.role || null;
+        const User = require('../../models/User');
+        const userRow = await User.findOne({ where: { user_id: decoded.user_id } });
+        currentUserName = (userRow && userRow.full_name) ? userRow.full_name : decoded.username;
+      }
+    }
+  } catch (e) {
+    // ignore token errors; fallback ke payload jika ada
+  }
   const map = {
     'surat keterangan aktif kuliah': 'template_surat_keterangan_mahasiswa_aktif.docx',
     'surat keterangan lulus': 'template_surat_keterangan_lulus.docx',
@@ -98,6 +118,8 @@ async function generateSuratKeterangan(req, res) {
         tanggal: body.tanggal || '',
         nama_dekan: body.nama_dekan || '',
         nip_dekan: body.nip_dekan || '',
+        nama_user: body.nama_user || currentUserName || '',
+        role: body.role || currentUserRole || '',
       });
     } catch (err) {
       return res.status(400).json({ message: 'Template gagal dirender' });
@@ -124,6 +146,8 @@ async function generateSuratKeterangan(req, res) {
       tanggal: body.tanggal || '',
       nama_dekan: body.nama_dekan || '',
       nip_dekan: body.nip_dekan || '',
+      nama_user: body.nama_user || currentUserName || null,
+      role: body.role || currentUserRole || null,
     });
 
     return res.json({ message: 'Dokumen berhasil dibuat', file: desiredName });

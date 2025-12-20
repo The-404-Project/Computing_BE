@@ -38,7 +38,9 @@ async function createDokumen({
   kota = null,
   tanggal = null,
   nama_dekan = null,
-  nip_dekan = null
+  nip_dekan = null,
+  nama_user = null,
+  role = null
 }) {
   try {
     return await Document.create({
@@ -61,6 +63,8 @@ async function createDokumen({
         tanggal,
         nama_dekan,
         nip_dekan,
+        nama_user,
+        role,
       },
     });
   } catch (error) {
