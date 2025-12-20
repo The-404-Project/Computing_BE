@@ -133,4 +133,15 @@ async function generateSuratKeterangan(req, res) {
   }
 }
 
+async function getNextNumber(req, res) {
+  try {
+    const nextNumber = await service.getNextDocNumber();
+    return res.json({ nextNumber });
+  } catch (e) {
+    console.error('Error fetching next number:', e);
+    return res.status(500).json({ message: 'Gagal mengambil nomor surat berikutnya' });
+  }
+}
+
 module.exports.generateSuratKeterangan = generateSuratKeterangan;
+module.exports.getNextNumber = getNextNumber;

@@ -69,6 +69,49 @@ async function createDokumen({
   }
 }
 
+async function getNextDocNumber() {
+  try {
+    const lastDoc = await Document.findOne({
+      where: { doc_type: 'surat_keterangan' },
+      order: [['created_at', 'DESC']],
+    });
+
+    if (!lastDoc || !lastDoc.doc_number) {
+      return '001';
+    }
+
+    const lastNumber = lastDoc.doc_number;
+    
+    // 1. Try to match starting number (e.g., "001/SK/2023")
+    const startMatch = lastNumber.match(/^(\d+)(.*)$/);
+    if (startMatch) {
+      const numberPart = startMatch[1];
+      const suffixPart = startMatch[2];
+      const nextNum = parseInt(numberPart, 10) + 1;
+      const paddedNextNum = String(nextNum).padStart(numberPart.length, '0');
+      return paddedNextNum + suffixPart;
+    }
+
+    // 2. Try to match ending number (e.g., "SK/2023/001")
+    const endMatch = lastNumber.match(/^(.*?)(\d+)$/);
+    if (endMatch) {
+        const prefixPart = endMatch[1];
+        const numberPart = endMatch[2];
+        const nextNum = parseInt(numberPart, 10) + 1;
+        const paddedNextNum = String(nextNum).padStart(numberPart.length, '0');
+        return prefixPart + paddedNextNum;
+    }
+
+    // 3. Fallback: Append a number
+    return lastNumber + '-1';
+  } catch (error) {
+    console.error('Error getting next number:', error);
+    return '001';
+  }
+}
+
+module.exports = { findMahasiswaByNim, findDokumenByNomor, createDokumen, getNextDocNumber };
+
 /**
  * Regenerate surat keterangan document from metadata
  * @param {object} data - Data object containing document metadata
@@ -211,4 +254,4 @@ async function processSuratKeteranganGeneration(data, format = 'docx') {
   }
 }
 
-module.exports = { findMahasiswaByNim, findDokumenByNomor, createDokumen, processSuratKeteranganGeneration };
+module.exports = { findMahasiswaByNim, findDokumenByNomor, createDokumen, processSuratKeteranganGeneration, getNextDocNumber };
