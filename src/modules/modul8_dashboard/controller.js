@@ -685,6 +685,45 @@ const getAllTemplates = async (req, res) => {
   }
 };
 
+// Get Templates by Type (untuk dropdown di halaman surat)
+const getTemplatesByType = async (req, res) => {
+  try {
+    const Template = require('../../models/Template');
+    const { Op } = require('sequelize');
+    const { type } = req.params;
+
+    // Mapping jenis template ke template_type di database
+    // Untuk dropdown di halaman surat, kita ambil template yang sesuai dengan jenis surat tersebut
+    const typeMapping = {
+      'surat_tugas': ['surat_tugas', 'sppd'], // Surat Tugas bisa menggunakan template surat_tugas atau sppd
+      'sppd': ['sppd', 'surat_tugas'], // SPPD juga bisa menggunakan template surat_tugas
+      'surat_undangan': ['surat_undangan'],
+      'surat_keterangan': ['surat_keterangan', 'surat_keterangan_aktif_kuliah', 'surat_keterangan_lulus', 'surat_keterangan_kelakuan_baik', 'surat_keterangan_bebas_pinjaman'],
+      'surat_pengantar': ['surat_pengantar', 'surat_pengantar_A', 'surat_pengantar_B'],
+      'surat_keputusan': ['surat_keputusan'],
+      'surat_prodi': ['surat_prodi'],
+      'surat_laak': ['surat_laak'],
+    };
+
+    const templateTypes = typeMapping[type] || [type];
+
+    const templates = await Template.findAll({
+      where: {
+        template_type: {
+          [Op.in]: templateTypes
+        },
+        is_active: true,
+      },
+      order: [['template_name', 'ASC']],
+    });
+
+    res.json({ templates });
+  } catch (error) {
+    console.error('Get Templates By Type Error:', error);
+    res.status(500).json({ message: 'Gagal mengambil data templates: ' + error.message });
+  }
+};
+
 // Get Template by ID
 const getTemplateById = async (req, res) => {
   try {
@@ -710,7 +749,7 @@ const createTemplate = async (req, res) => {
     const fs = require('fs');
     const path = require('path');
 
-    const { template_name, template_type, description, variables, is_active = true } = req.body;
+    const { template_name, template_type, description, is_active = 'true' } = req.body;
 
     // Validasi
     if (!template_name || !template_type) {
@@ -735,22 +774,12 @@ const createTemplate = async (req, res) => {
       return res.status(400).json({ message: 'File template wajib diupload' });
     }
 
-    // Parse variables if string
-    let variablesObj = variables;
-    if (typeof variables === 'string') {
-      try {
-        variablesObj = JSON.parse(variables);
-      } catch (e) {
-        variablesObj = null;
-      }
-    }
-
-    // Create template
+    // Create template (variables tidak diperlukan, is_active default true)
     const template = await Template.create({
       template_name,
       template_type,
       file_path,
-      variables: variablesObj,
+      variables: null,
       description: description || null,
       is_active: is_active === true || is_active === 'true',
     });
@@ -889,6 +918,90 @@ const deleteTemplate = async (req, res) => {
   }
 };
 
+// Download Template File
+const downloadTemplateFile = async (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const { filename } = req.params;
+
+    // Decode filename jika ada encoding
+    const decodedFilename = decodeURIComponent(filename);
+
+    // Path ke folder templates - dari modul8_dashboard ke templates
+    // __dirname = Computing_BE/src/modules/modul8_dashboard
+    // ../../templates/surat_templates = Computing_BE/src/templates/surat_templates
+    const templatesDir = path.resolve(__dirname, '../../templates/surat_templates');
+    
+    console.log('[Download Template] __dirname:', __dirname);
+    console.log('[Download Template] Templates directory:', templatesDir);
+    console.log('[Download Template] Templates directory exists?', fs.existsSync(templatesDir));
+    
+    // List semua file di directory untuk debugging
+    if (fs.existsSync(templatesDir)) {
+      const allFiles = fs.readdirSync(templatesDir);
+      console.log('[Download Template] All files in directory:', allFiles);
+    }
+    
+    const templatePath = path.join(templatesDir, decodedFilename);
+    
+    // Security: Pastikan path tidak keluar dari templates directory (path traversal protection)
+    const normalizedTemplatePath = path.normalize(templatePath);
+    const normalizedTemplatesDir = path.normalize(templatesDir);
+    
+    if (!normalizedTemplatePath.startsWith(normalizedTemplatesDir)) {
+      console.error('[Download Template] Path traversal detected!');
+      return res.status(400).json({ message: 'Invalid file path' });
+    }
+
+    console.log('[Download Template] Requested filename:', filename);
+    console.log('[Download Template] Decoded filename:', decodedFilename);
+    console.log('[Download Template] Template path:', templatePath);
+    console.log('[Download Template] Normalized path:', normalizedTemplatePath);
+    console.log('[Download Template] File exists?', fs.existsSync(templatePath));
+
+    // Validasi file exists
+    if (!fs.existsSync(templatePath)) {
+      // List files in directory untuk debugging
+      const templateDir = path.resolve(__dirname, '../../templates/surat_templates');
+      const files = fs.existsSync(templateDir) ? fs.readdirSync(templateDir) : [];
+      console.log('[Download Template] Available files:', files);
+      
+      return res.status(404).json({ 
+        message: `Template file tidak ditemukan: ${decodedFilename}`,
+        availableFiles: files
+      });
+    }
+
+    // Set headers untuk download
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'Content-Disposition': `attachment; filename="${decodedFilename}"`,
+    });
+
+    // Send file menggunakan absolute path
+    console.log('[Download Template] Sending file:', normalizedTemplatePath);
+    
+    // Baca file dan kirim sebagai buffer (lebih reliable daripada sendFile)
+    try {
+      const fileBuffer = fs.readFileSync(normalizedTemplatePath);
+      console.log('[Download Template] File read successfully, size:', fileBuffer.length);
+      res.send(fileBuffer);
+      console.log('[Download Template] File sent successfully');
+    } catch (readErr) {
+      console.error('[Download Template] Error reading file:', readErr);
+      if (!res.headersSent) {
+        res.status(500).json({ message: 'Gagal membaca file: ' + readErr.message });
+      }
+    }
+  } catch (error) {
+    console.error('[Download Template] Error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Gagal mengunduh template: ' + error.message });
+    }
+  }
+};
+
 // Toggle Template Active Status
 const toggleTemplateActive = async (req, res) => {
   try {
@@ -968,10 +1081,12 @@ module.exports = {
   downloadDocument,
   exportHistory,
   getAllTemplates,
+  getTemplatesByType,
   getTemplateById,
   createTemplate,
   updateTemplate,
   deleteTemplate,
   toggleTemplateActive,
   previewTemplate,
+  downloadTemplateFile,
 };

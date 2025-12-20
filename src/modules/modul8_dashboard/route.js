@@ -39,9 +39,12 @@ router.get('/documents/:id/download', controller.downloadDocument);
 router.get('/documents/export', controller.exportHistory);
 
 // Template Management Routes (hanya admin)
+// IMPORTANT: Route yang lebih spesifik harus diletakkan SEBELUM route yang lebih umum
 router.get('/templates', controller.getAllTemplates);
-router.get('/templates/:id', controller.getTemplateById);
+router.get('/templates/by-type/:type', controller.getTemplatesByType); // Get templates by type
+router.get('/templates/download/:filename', controller.downloadTemplateFile); // Harus sebelum /templates/:id
 router.get('/templates/:id/preview', controller.previewTemplate);
+router.get('/templates/:id', controller.getTemplateById);
 router.post('/templates', upload.single('file'), controller.createTemplate);
 router.put('/templates/:id', upload.single('file'), controller.updateTemplate);
 router.delete('/templates/:id', controller.deleteTemplate);
