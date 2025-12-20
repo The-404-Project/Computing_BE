@@ -1,64 +1,59 @@
-const Document = require('../../models/Document'); // Gunakan model global untuk konsistensi
+const Document = require('./model'); // Pastikan import model lokal
 const { Op } = require('sequelize');
 const undanganService = require('./service');
 
-// Fungsi Auto Number (Format: 001/UND/FI/10/2025)
+// ... (Fungsi generateNomorSurat biarkan tetap sama) ...
 const generateNomorSurat = async () => {
-  const today = new Date();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const year = today.getFullYear();
-
-  // Hitung jumlah surat tipe 'surat_undangan' di bulan & tahun ini
-  const count = await Document.count({
-    where: {
-      doc_type: 'surat_undangan',
-      created_at: {
-        [Op.gte]: new Date(year, today.getMonth(), 1),
-        [Op.lt]: new Date(year, today.getMonth() + 1, 1),
-      },
-    },
-  });
-
-  return `${String(count + 1).padStart(3, '0')}/UND/FI/${month}/${year}`;
+    // ... logic auto number ...
+    // (Copy dari kode kamu sebelumnya)
+    const today = new Date();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const year = today.getFullYear();
+    const count = await Document.count({
+        where: {
+            doc_type: 'surat_undangan',
+            created_at: {
+                [Op.gte]: new Date(year, today.getMonth(), 1),
+                [Op.lt]: new Date(year, today.getMonth() + 1, 1),
+            },
+        },
+    });
+    return `${String(count + 1).padStart(3, '0')}/UND/FI/${month}/${year}`;
 };
 
 const create = async (req, res) => {
   try {
-    // Ambil data dari Body (Termasuk list_tamu array)
     const { nomorSurat, perihal, kepada, tanggalAcara, tempat, list_tamu, agenda } = req.body;
-
-    // Mock User ID (Nanti ganti dengan req.user.id dari middleware auth)
     const user_id = req.user ? req.user.user_id : 1;
 
-    // 1. Generate Nomor Surat Otomatis jika kosong
     let finalNomorSurat = nomorSurat;
     if (!finalNomorSurat) {
       finalNomorSurat = await generateNomorSurat();
     }
 
-    // 2. Siapkan Payload untuk Service
     const requestedFormat = req.query.format || 'docx';
     const payload = {
       ...req.body,
       nomorSurat: finalNomorSurat,
-      list_tamu: list_tamu, // PENTING: Kirim array ini ke service
+      list_tamu: list_tamu,
     };
 
-    // 3. Proses Generate File
+    // 1. Panggil Service (Sekarang service mengembalikan filePath juga)
     const result = await undanganService.processSuratUndangan(payload, requestedFormat);
 
-    // 4. Simpan Log ke Database (Tabel documents) - Jangan block jika error
+    // 2. Simpan ke Database
     try {
       await Document.create({
         doc_number: finalNomorSurat,
         doc_type: 'surat_undangan',
-        status: 'generated', // Status berubah jadi generated
+        status: 'generated',
         created_by: user_id,
-        // Simpan detail input di metadata (JSON)
+        // SIMPAN PATH FILE FISIK DI SINI
+        file_path: result.filePath, 
         metadata: {
           perihal,
-          kepada_display: kepada, // String gabungan untuk display cepat
-          list_tamu_json: list_tamu, // Simpan array asli
+          kepada_display: kepada, 
+          list_tamu_json: list_tamu,
           tanggal_acara: tanggalAcara,
           tempat,
           agenda,
@@ -68,10 +63,9 @@ const create = async (req, res) => {
       console.log(`[Modul 2] Document saved to database: ${finalNomorSurat}`);
     } catch (dbError) {
       console.error('[Modul 2] Error saving to database:', dbError);
-      // Continue anyway, don't block file download
     }
 
-    // 5. Kirim File ke User
+    // 3. Kirim File ke User
     res.set({
       'Content-Type': result.mimeType,
       'Content-Disposition': `attachment; filename=${result.fileName}`,
