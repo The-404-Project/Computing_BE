@@ -1,32 +1,100 @@
 const suratService = require('./service');
+const Document = require('../../models/Document');
+const { Op } = require('sequelize');
+
+/**
+ * Fungsi Auto Number (Format: 001/SP/FI/MM/YYYY untuk Surat Pengantar, 001/PM/FI/MM/YYYY untuk Permohonan)
+ */
+const generateNomorSurat = async (jenis_surat) => {
+  const today = new Date();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const year = today.getFullYear();
+
+  // Tentukan prefix berdasarkan jenis surat
+  const prefix = jenis_surat && jenis_surat.includes('permohonan') ? 'PM' : 'SP';
+  const docType = jenis_surat && jenis_surat.includes('permohonan') ? 'surat_permohonan' : 'surat_pengantar';
+
+  // Hitung jumlah surat tipe tersebut di bulan & tahun ini
+  const count = await Document.count({
+    where: {
+      doc_type: docType,
+      created_at: {
+        [Op.gte]: new Date(year, today.getMonth(), 1),
+        [Op.lt]: new Date(year, today.getMonth() + 1, 1),
+      },
+    },
+  });
+
+  return `${String(count + 1).padStart(3, '0')}/${prefix}/FI/${month}/${year}`;
+};
 
 /**
  * Controller to handle document generation requests.
  * Accepts JSON data and returns a downloadable file (DOCX or PDF).
  */
 const generate = async (req, res) => {
-    try {
-        const requestedFormat = req.query.format || 'docx'; 
-        
-        console.log(`[Modul 4] Generating ${req.body.jenis_surat} -> ${requestedFormat.toUpperCase()}`);
+  try {
+    const requestedFormat = req.query.format || 'docx';
 
-        // Process data and generate document buffer via service
-        const result = await suratService.processSuratGeneration(req.body, requestedFormat);
+    console.log(`[Modul 4] Generating ${req.body.jenis_surat} -> ${requestedFormat.toUpperCase()}`);
 
-        // Set headers to trigger file download in the browser
-        res.set({
-            'Content-Type': result.mimeType,
-            'Content-Disposition': `attachment; filename=${result.fileName}`,
-            'Content-Length': result.buffer.length
-        });
+    // Ambil data dari Body
+    const { nomorSurat, jenis_surat, metadata, content_blocks, dynamic_data } = req.body;
 
-        // Send binary data
-        res.send(result.buffer);
+    // Mock User ID (Nanti ganti dengan req.user.id dari middleware auth)
+    const user_id = req.user ? req.user.user_id : 1;
 
-    } catch (error) {
-        console.error('[Modul 4 Error]', error);
-        res.status(500).json({ message: 'Failed to generate document', error: error.message });
+    // 1. Generate Nomor Surat Otomatis jika kosong
+    let finalNomorSurat = nomorSurat;
+    if (!finalNomorSurat) {
+      finalNomorSurat = await generateNomorSurat(jenis_surat);
     }
+
+    // 2. Siapkan Payload untuk Service
+    const payload = {
+      ...req.body,
+      nomorSurat: finalNomorSurat,
+    };
+
+    // 3. Process data and generate document buffer via service
+    const result = await suratService.processSuratGeneration(payload, requestedFormat);
+
+    // 4. Simpan Log ke Database (Tabel documents) - Jangan block jika error
+    const docType = jenis_surat && jenis_surat.includes('permohonan') ? 'surat_permohonan' : 'surat_pengantar';
+    try {
+      await Document.create({
+        doc_number: finalNomorSurat,
+        doc_type: docType,
+        status: 'generated',
+        created_by: user_id,
+        // Simpan detail input di metadata (JSON)
+        metadata: {
+          jenis_surat,
+          ...metadata,
+          content_blocks,
+          dynamic_data,
+          generated_filename: result.fileName,
+        },
+      });
+      console.log(`[Modul 4] Document saved to database: ${finalNomorSurat}`);
+    } catch (dbError) {
+      console.error('[Modul 4] Error saving to database:', dbError);
+      // Continue anyway, don't block file download
+    }
+
+    // 5. Set headers to trigger file download in the browser
+    res.set({
+      'Content-Type': result.mimeType,
+      'Content-Disposition': `attachment; filename=${result.fileName}`,
+      'Content-Length': result.buffer.length,
+    });
+
+    // 6. Send binary data
+    res.send(result.buffer);
+  } catch (error) {
+    console.error('[Modul 4 Error]', error);
+    res.status(500).json({ message: 'Failed to generate document', error: error.message });
+  }
 };
 
 module.exports = { generate };
