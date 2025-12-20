@@ -1,95 +1,157 @@
-const { generateWordFile, generatePdfFile } = require('../../utils/doc_Generator');
+const { generateWordFile, generatePdfFile } = require('../../utils/doc_generator');
 
 /**
  * Helper: Mengubah string tanggal (YYYY-MM-DD) menjadi format Indonesia
  * Contoh: 2025-10-20 -> 20 Oktober 2025
  */
 const formatTanggalIndo = (dateString) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+  if (!dateString) return '-';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 };
 
 /**
  * Helper: Menghitung selisih hari (inklusif)
  */
 const hitungLamaHari = (startDate, endDate) => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const diffTime = Math.abs(end - start);
-    // Dibagi (ms * detik * menit * jam)
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-    return diffDays + 1; // +1 supaya hari pertama dihitung
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const diffTime = Math.abs(end - start);
+  // Dibagi (ms * detik * menit * jam)
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays + 1; // +1 supaya hari pertama dihitung
 };
 
 /**
  * Orchestrates the Surat Tugas generation process.
  */
 const processSuratTugasGeneration = async (data, format = 'docx') => {
-    // 1. Destructure Data (Sesuaikan dengan Form Input Modul 1)
-    const { 
-        jenis_surat, // 'surat_tugas_dosen', 'surat_tugas_staf', 'sppd'
-        nomorSurat, 
-        namaPegawai, 
-        nip, 
-        pangkat, 
-        jabatan, 
-        tujuanTugas, 
-        keperluan, 
-        tanggalMulai, 
-        tanggalSelesai, 
-        biaya, 
-        kendaraan 
-    } = data;
+  // 1. Destructure Data (Sesuaikan dengan Form Input Modul 1)
+  const {
+    jenis_surat, // 'surat_tugas_dosen', 'surat_tugas_staf', 'sppd', atau 'template_123'
+    nomorSurat,
+    namaPegawai,
+    nip,
+    pangkat,
+    jabatan,
+    tujuanTugas,
+    keperluan,
+    tanggalMulai,
+    tanggalSelesai,
+    biaya,
+    kendaraan,
+  } = data;
 
-    // 2. Pilih Template berdasarkan jenis surat
-    let templateName = 'template_surat_tugas.docx'; // Default
+  // 2. Pilih Template berdasarkan jenis surat
+  let templateName = 'template_surat_tugas.docx'; // Default
+  let templatePath = null; // Untuk template dari database
+
+  // Cek apakah menggunakan template dari database (format: template_123)
+  if (jenis_surat && jenis_surat.startsWith('template_')) {
+    const templateId = parseInt(jenis_surat.replace('template_', ''));
+    if (!isNaN(templateId)) {
+      try {
+        const Template = require('../../models/Template');
+        const template = await Template.findOne({
+          where: {
+            template_id: templateId,
+            is_active: true,
+          },
+        });
+
+        if (template && template.file_path) {
+          // Extract filename dari file_path
+          const path = require('path');
+          const fileName = path.basename(template.file_path);
+          templateName = fileName;
+          templatePath = template.file_path;
+          console.log(`[Modul 1] Using custom template: ${template.template_name} (${fileName})`);
+        } else {
+          console.warn(`[Modul 1] Template ID ${templateId} not found, using default`);
+        }
+      } catch (templateError) {
+        console.error('[Modul 1] Error loading template from database:', templateError);
+        // Fallback ke default
+      }
+    }
+  } else {
+    // Template default
     if (jenis_surat === 'sppd') {
-        templateName = 'template_sppd.docx';
+      templateName = 'template_sppd.docx';
+    } else if (jenis_surat === 'surat_tugas_dosen' || jenis_surat === 'surat_tugas_staf') {
+      templateName = 'template_surat_tugas.docx';
     }
+  }
 
-    // 3. Hitung Logika Bisnis (Tanggal & Durasi)
-    const lama_hari = hitungLamaHari(tanggalMulai, tanggalSelesai);
-    const tgl_mulai_indo = formatTanggalIndo(tanggalMulai);
-    const tgl_selesai_indo = formatTanggalIndo(tanggalSelesai);
-    const today_indo = formatTanggalIndo(new Date());
+  // 3. Hitung Logika Bisnis (Tanggal & Durasi)
+  const lama_hari = hitungLamaHari(tanggalMulai, tanggalSelesai);
+  const tgl_mulai_indo = formatTanggalIndo(tanggalMulai);
+  const tgl_selesai_indo = formatTanggalIndo(tanggalSelesai);
+  const today_indo = formatTanggalIndo(new Date());
 
-    // 4. Mapping Data ke Context (Placeholder di Word: {nama}, {nip}, dll)
-    const context = {
-        nomor_surat: nomorSurat || "XXX/ST/FI/2025", // Default jika auto-generate belum di-save ke DB
-        nama: namaPegawai,
-        nip: nip,
-        pangkat: pangkat || '-',
-        jabatan: jabatan || '-',
-        tujuan: tujuanTugas,
-        keperluan: keperluan,
-        tanggal_mulai: tgl_mulai_indo,
-        tanggal_selesai: tgl_selesai_indo,
-        lama_hari: `${lama_hari} Hari`,
-        biaya: biaya || "DIPA Fakultas",
-        kendaraan: kendaraan || "Umum",
-        tanggal_surat: today_indo
-    };
+  // 4. Mapping Data ke Context (Placeholder di Word: {nama}, {nip}, dll)
+  const context = {
+    nomor_surat: nomorSurat || 'XXX/ST/FI/2025', // Default jika auto-generate belum di-save ke DB
+    nama: namaPegawai,
+    nip: nip,
+    pangkat: pangkat || '-',
+    jabatan: jabatan || '-',
+    tujuan: tujuanTugas,
+    keperluan: keperluan,
+    tanggal_mulai: tgl_mulai_indo,
+    tanggal_selesai: tgl_selesai_indo,
+    lama_hari: `${lama_hari} Hari`,
+    biaya: biaya || 'DIPA Fakultas',
+    kendaraan: kendaraan || 'Umum',
+    tanggal_surat: today_indo,
+  };
 
-    // 5. Generate DOCX Buffer (Pakai fungsi utils yang sama dengan Modul 4)
-    const docxBuffer = generateWordFile(templateName, context);
-    
-    // 6. Handle PDF Conversion
-    let finalBuffer = docxBuffer;
-    let mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    let ext = 'docx';
+  // 5. Generate DOCX Buffer (Pakai fungsi utils yang sama dengan Modul 4)
+  // Jika menggunakan template dari database, gunakan file_path langsung
+  let docxBuffer;
+  if (templatePath) {
+    const fs = require('fs');
+    const path = require('path');
+    const PizZip = require('pizzip');
+    const Docxtemplater = require('docxtemplater');
 
-    if (format === 'pdf') {
-        finalBuffer = await generatePdfFile(docxBuffer);
-        mimeType = 'application/pdf';
-        ext = 'pdf';
+    const fullPath = path.resolve(__dirname, '../../', templatePath);
+    if (fs.existsSync(fullPath)) {
+      console.log(`[Modul 1] Using template from database: ${fullPath}`);
+      // Baca template dari path database
+      const content = fs.readFileSync(fullPath, 'binary');
+      const zip = new PizZip(content);
+      const doc = new Docxtemplater(zip, {
+        paragraphLoop: true,
+        linebreaks: true,
+        nullGetter: () => '',
+      });
+      doc.render(context);
+      docxBuffer = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+    } else {
+      console.warn(`[Modul 1] Template file not found at ${fullPath}, using default`);
+      docxBuffer = generateWordFile(templateName, context);
     }
+  } else {
+    docxBuffer = generateWordFile(templateName, context);
+  }
 
-    // 7. Buat Nama File yang Bersih
-    const cleanNama = (namaPegawai || 'Surat').replace(/[^a-zA-Z0-9]/g, '_');
-    const fileName = `SuratTugas_${cleanNama}_${Date.now()}.${ext}`;
+  // 6. Handle PDF Conversion
+  let finalBuffer = docxBuffer;
+  let mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  let ext = 'docx';
 
-    return { buffer: finalBuffer, fileName, mimeType };
+  if (format === 'pdf') {
+    finalBuffer = await generatePdfFile(docxBuffer);
+    mimeType = 'application/pdf';
+    ext = 'pdf';
+  }
+
+  // 7. Buat Nama File yang Bersih
+  const cleanNama = (namaPegawai || 'Surat').replace(/[^a-zA-Z0-9]/g, '_');
+  const fileName = `SuratTugas_${cleanNama}_${Date.now()}.${ext}`;
+
+  return { buffer: finalBuffer, fileName, mimeType };
 };
 
 module.exports = { processSuratTugasGeneration };
