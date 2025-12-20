@@ -399,9 +399,19 @@ const downloadDocument = async (req, res) => {
       return res.status(404).json({ message: 'Dokumen tidak ditemukan' });
     }
 
-    // Get metadata
-    const metadata = document.metadata || {};
+    // Get metadata - handle both JSON object and JSON string
+    let metadata = document.metadata || {};
+    if (typeof metadata === 'string') {
+      try {
+        metadata = JSON.parse(metadata);
+      } catch (parseError) {
+        console.error('Error parsing metadata:', parseError);
+        metadata = {};
+      }
+    }
     const docType = document.doc_type;
+
+    console.log(`[Download] Document ID: ${id}, Type: ${docType}, Metadata:`, JSON.stringify(metadata));
 
     let result;
 
@@ -455,12 +465,92 @@ const downloadDocument = async (req, res) => {
           result = await pengantarService.processSuratGeneration(pengantarData, format);
           break;
 
+        case 'surat_keterangan':
+          const keteranganService = require('../modul3_surat_keterangan/service');
+          const fs = require('fs');
+          const path = require('path');
+          
+          // Cek apakah file masih ada di disk (untuk kompatibilitas dengan dokumen lama)
+          // Hanya untuk format DOCX, karena PDF harus selalu di-regenerate
+          if (document.file_path && format === 'docx') {
+            // file_path bisa berupa nama file saja atau path lengkap
+            let fileName = document.file_path;
+            // Jika file_path tidak mengandung path separator, berarti hanya nama file
+            if (!fileName.includes('/') && !fileName.includes('\\')) {
+              fileName = document.file_path;
+            }
+            
+            const filePath = path.join(__dirname, '../../../output/generated_documents', fileName);
+            console.log('[Download] Surat Keterangan: Mencoba file dari disk:', filePath);
+            console.log('[Download] Surat Keterangan: File exists?', fs.existsSync(filePath));
+            
+            if (fs.existsSync(filePath)) {
+              try {
+                console.log('[Download] Surat Keterangan: File ditemukan di disk, mengirim langsung');
+                const fileBuffer = fs.readFileSync(filePath);
+                const mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                
+                res.set({
+                  'Content-Type': mimeType,
+                  'Content-Disposition': `attachment; filename="${fileName}"`,
+                  'Content-Length': fileBuffer.length,
+                });
+                return res.send(fileBuffer);
+              } catch (fileError) {
+                console.error('[Download] Surat Keterangan: Error membaca file dari disk:', fileError);
+                // Fallback ke regenerate jika error membaca file
+                console.log('[Download] Surat Keterangan: Fallback ke regenerate karena error membaca file');
+              }
+            } else {
+              console.log('[Download] Surat Keterangan: File tidak ditemukan di disk, akan regenerate');
+            }
+          }
+          
+          // Jika file tidak ada atau format PDF, regenerate dari metadata
+          // Validasi data yang diperlukan (untuk dokumen lama, mungkin tidak ada semua metadata)
+          if (!metadata.nim) {
+            console.error('[Download] Surat Keterangan: NIM tidak ditemukan di metadata');
+            return res.status(400).json({ 
+              message: 'Metadata dokumen tidak lengkap. NIM mahasiswa tidak ditemukan.' 
+            });
+          }
+          
+          if (!metadata.jenis_surat) {
+            console.error('[Download] Surat Keterangan: Jenis surat tidak ditemukan di metadata');
+            // Coba gunakan default jika tidak ada
+            console.warn('[Download] Surat Keterangan: Menggunakan jenis surat default');
+          }
+
+          const keteranganData = {
+            nomorSurat: document.doc_number,
+            nim: metadata.nim,
+            jenis_surat: metadata.jenis_surat || 'surat keterangan aktif kuliah', // Default jika tidak ada
+            keperluan: metadata.keperluan || '',
+            kota: metadata.kota || '',
+            tanggal: metadata.tanggal || '',
+            nama_dekan: metadata.nama_dekan || '',
+            nip_dekan: metadata.nip_dekan || '',
+            // Data mahasiswa (jika sudah ada di metadata, akan diambil dari DB jika tidak ada)
+            nama: metadata.nama || '',
+            program_studi: metadata.program_studi || '',
+            tahun_akademik: metadata.tahun_akademik || '',
+            status: metadata.status || '',
+          };
+          
+          console.log('[Download] Surat Keterangan Data:', JSON.stringify(keteranganData));
+          result = await keteranganService.processSuratKeteranganGeneration(keteranganData, format);
+          break;
+
         default:
           return res.status(400).json({ message: `Tipe dokumen ${docType} belum didukung untuk download` });
       }
     } catch (regenerateError) {
-      console.error('Regenerate Error:', regenerateError);
-      return res.status(500).json({ message: 'Gagal regenerate dokumen: ' + regenerateError.message });
+      console.error('[Download] Regenerate Error:', regenerateError);
+      console.error('[Download] Error Stack:', regenerateError.stack);
+      return res.status(500).json({ 
+        message: 'Gagal regenerate dokumen: ' + regenerateError.message,
+        error: process.env.NODE_ENV === 'development' ? regenerateError.stack : undefined
+      });
     }
 
     // Send file
