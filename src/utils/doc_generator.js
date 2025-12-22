@@ -4,9 +4,11 @@ const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
 
+// --- LIBRARY BARU UNTUK WATERMARK ---
+const { PDFDocument, rgb, degrees, StandardFonts } = require('pdf-lib');
+
 /**
  * Custom parser to enable dot notation access in Docxtemplater tags.
- * Allows nested data access like {metadata.nomor_surat} or {user.name}.
  */
 const customParser = function(tag) {
     return {
@@ -20,10 +22,7 @@ const customParser = function(tag) {
 };
 
 /**
- * Generates a DOCX file buffer by rendering data into a template.
- * @param {string} templateName - Filename of the .docx template
- * @param {object} data - Data object to populate the template
- * @returns {Buffer} The generated DOCX buffer
+ * 1. GENERATOR WORD (DOCX)
  */
 const generateWordFile = (templateName, data) => {
     const templatePath = path.resolve(__dirname, '../templates/surat_templates', templateName);
@@ -42,20 +41,26 @@ const generateWordFile = (templateName, data) => {
         nullGetter: () => "" 
     });
     
-    doc.render(data);
+    try {
+        doc.render(data);
+    } catch (error) {
+        if (error.properties && error.properties.errors instanceof Array) {
+            console.log("❌ ERROR TEMPLATE WORD:", error.properties.errors); 
+        }
+        throw error;
+    }
+
     return doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 };
 
 /**
- * Converts a DOCX buffer to PDF using a system-installed LibreOffice instance.
- * Strategy: Write temp file -> Execute CLI command -> Read result -> Cleanup.
- * @param {Buffer} docxBuffer - The DOCX file buffer
- * @returns {Promise<Buffer>} The generated PDF buffer
+ * 2. GENERATOR PDF (VIA CLI LIBREOFFICE)
  */
 const generatePdfFile = (docxBuffer) => {
     return new Promise((resolve, reject) => {
         const timestamp = Date.now();
-        const outputDir = path.resolve(__dirname, '../../output'); 
+        // Gunakan folder temp khusus konversi
+        const outputDir = path.resolve(__dirname, '../../output/temp_conversion'); 
 
         // Ensure temp directory exists
         if (!fs.existsSync(outputDir)) {
@@ -63,44 +68,83 @@ const generatePdfFile = (docxBuffer) => {
         }
 
         const inputPath = path.join(outputDir, `temp_${timestamp}.docx`);
-        const outputPath = path.join(outputDir, `temp_${timestamp}.pdf`);
+        const expectedPdfPath = path.join(outputDir, `temp_${timestamp}.pdf`);
 
         // 1. Write DOCX buffer to a physical temp file
-        fs.writeFileSync(inputPath, docxBuffer);
+        try {
+            fs.writeFileSync(inputPath, docxBuffer);
+        } catch (err) {
+            return reject(new Error("Gagal menulis file temporary: " + err.message));
+        }
 
         // 2. Execute LibreOffice command (Headless mode)
-        // --outdir forces the output to the specific temp folder
         const command = `soffice --headless --convert-to pdf "${inputPath}" --outdir "${outputDir}"`;
 
-        console.log(`[PDF] Executing command: ${command}`);
+        console.log(`[PDF CLI] Executing: ${command}`);
 
         exec(command, (error, stdout, stderr) => {
             if (error) {
-                console.error(`[PDF ERROR] Exec error: ${error}`);
-                // Attempt cleanup even on failure
+                console.error(`[PDF CLI ERROR]: ${error.message}`);
                 if(fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
                 return reject(error);
             }
 
             // 3. Check if PDF was successfully created
-            if (fs.existsSync(outputPath)) {
-                console.log("[PDF] PDF created successfully. Reading buffer...");
-                const pdfBuffer = fs.readFileSync(outputPath);
+            if (fs.existsSync(expectedPdfPath)) {
+                const pdfBuffer = fs.readFileSync(expectedPdfPath);
 
                 // 4. Cleanup temporary files
                 try {
                     fs.unlinkSync(inputPath);
-                    fs.unlinkSync(outputPath);
+                    fs.unlinkSync(expectedPdfPath);
                 } catch (e) { console.warn("Failed to cleanup temp files:", e); }
 
                 resolve(pdfBuffer);
             } else {
                 console.error("[PDF ERROR] Output file not found!");
                 console.error("LibreOffice Stderr:", stderr);
+                if(fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
                 reject(new Error("Failed to generate PDF via CLI."));
             }
         });
     });
 };
 
-module.exports = { generateWordFile, generatePdfFile };
+/**
+ * 3. FUNGSI WATERMARK (MENGGUNAKAN PDF-LIB)
+ * Menambahkan teks "PREVIEW MODE" diagonal di setiap halaman
+ */
+const addWatermarkToPdf = async (pdfBuffer) => {
+    try {
+        console.log("[Watermark] Menambahkan watermark 'PREVIEW'...");
+        const pdfDoc = await PDFDocument.load(pdfBuffer);
+        const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        const pages = pdfDoc.getPages();
+
+        pages.forEach(page => {
+            const { width, height } = page.getSize();
+            const text = 'PREVIEW MODE';
+            const fontSize = 50;
+            const textWidth = font.widthOfTextAtSize(text, fontSize);
+            
+            page.drawText(text, {
+                x: (width / 2) - (textWidth / 2) - 40,
+                y: height / 2,
+                size: fontSize,
+                font: font,
+                color: rgb(0.7, 0.7, 0.7), // Abu-abu
+                opacity: 0.3, // Transparan
+                rotate: degrees(45), // Miring
+            });
+        });
+
+        const pdfBytes = await pdfDoc.save();
+        return Buffer.from(pdfBytes);
+
+    } catch (error) {
+        console.error("❌ Gagal menambah watermark:", error);
+        return pdfBuffer; // Kembalikan PDF asli jika gagal
+    }
+};
+
+module.exports = { generateWordFile, generatePdfFile, addWatermarkToPdf };
