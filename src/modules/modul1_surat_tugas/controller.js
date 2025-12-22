@@ -95,7 +95,18 @@ const generate = async (req, res) => {
 
     } catch (error) {
         console.error('[Modul 1 Error]', error);
-        res.status(500).json({ message: 'Failed to generate Surat Tugas', error: error.message });
+        console.error('[Modul 1 Error Stack]', error.stack);
+        
+        // Pastikan response belum dikirim
+        if (!res.headersSent) {
+            res.status(500).json({ 
+                message: 'Failed to generate Surat Tugas', 
+                error: error.message,
+                details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            });
+        } else {
+            console.error('[Modul 1] Response already sent, cannot send error response');
+        }
     }
 };
 
