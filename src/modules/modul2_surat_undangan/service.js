@@ -24,9 +24,10 @@ const formatTanggalIndo = (dateString) => {
 const processSuratUndangan = async (data, format = 'docx', isPreview = false) => {
     
     // 1. Destructure Data
+    // PERBAIKAN: Ambil 'lokasi' dari data yang dikirim controller (bukan 'tempat')
     const { 
         jenis_surat, nomorSurat, lampiran, 
-        tanggalAcara, tempat, agenda,
+        tanggalAcara, lokasi, agenda, 
         list_tamu, waktuMulai, waktuAcara, waktuSelesai 
     } = data;
 
@@ -100,7 +101,10 @@ const processSuratUndangan = async (data, format = 'docx', isPreview = false) =>
         hari: hari_acara,
         tanggal: tgl_acara,
         waktu: waktu_fix,
-        tempat: tempat || "-",
+        
+        // PERBAIKAN: Isi tag {tempat} di Word dengan variabel 'lokasi' dari frontend
+        tempat: lokasi || "-", 
+        
         agenda: agenda || "-",
         tanggal_surat: today_indo,
         list_tamu: listTamuReady 

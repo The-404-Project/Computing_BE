@@ -1,14 +1,15 @@
+// File: src/modules/modul2_surat_undangan/controller.js
+
 const Document = require('./model'); // Pastikan import model lokal
 const { Op } = require('sequelize');
 const undanganService = require('./service');
 
-// ... (Fungsi generateNomorSurat biarkan tetap sama) ...
+// Fungsi Auto Number
 const generateNomorSurat = async () => {
-    // ... logic auto number ...
-    // (Copy dari kode kamu sebelumnya)
     const today = new Date();
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const year = today.getFullYear();
+
     const count = await Document.count({
         where: {
             doc_type: 'surat_undangan',
@@ -18,17 +19,20 @@ const generateNomorSurat = async () => {
             },
         },
     });
+
     return `${String(count + 1).padStart(3, '0')}/UND/FI/${month}/${year}`;
 };
 
 const create = async (req, res) => {
     try {
-        const { nomorSurat, perihal, kepada, tanggalAcara, tempat, list_tamu, agenda } = req.body;
+        // PERBAIKAN: Ambil 'lokasi' dari body, bukan 'tempat'
+        const { nomorSurat, perihal, kepada, tanggalAcara, lokasi, list_tamu, agenda } = req.body;
         const user_id = req.user ? req.user.user_id : 1;
 
-        let finalNomorSurat = nomorSurat; // isinya ""
+        // 1. Generate Nomor Surat jika kosong
+        let finalNomorSurat = nomorSurat;
         if (!finalNomorSurat) {
-            finalNomorSurat = await generateNomorSurat(); // TRIGGERED ✅
+            finalNomorSurat = await generateNomorSurat();
         }
 
         const requestedFormat = req.query.format || 'docx';
@@ -38,24 +42,26 @@ const create = async (req, res) => {
             list_tamu: list_tamu,
         };
 
-        // 1. Panggil Service (Sekarang service mengembalikan filePath juga)
+        // 2. Panggil Service
         const result = await undanganService.processSuratUndangan(payload, requestedFormat);
 
-        // 2. Simpan ke Database
+        // 3. Simpan Log ke Database
         try {
             await Document.create({
                 doc_number: finalNomorSurat,
                 doc_type: 'surat_undangan',
                 status: 'generated',
                 created_by: user_id,
-                // SIMPAN PATH FILE FISIK DI SINI
                 file_path: result.filePath,
                 metadata: {
                     perihal,
                     kepada_display: kepada,
                     list_tamu_json: list_tamu,
                     tanggal_acara: tanggalAcara,
-                    tempat,
+                    
+                    // PERBAIKAN: Simpan data lokasi ke field tempat di metadata
+                    tempat: lokasi, 
+                    
                     agenda,
                     generated_filename: result.fileName,
                 },
@@ -65,7 +71,7 @@ const create = async (req, res) => {
             console.error('[Modul 2] Error saving to database:', dbError);
         }
 
-        // 3. Kirim File ke User
+        // 4. Kirim File ke User
         res.set({
             'Content-Type': result.mimeType,
             'Content-Disposition': `attachment; filename=${result.fileName}`,
@@ -73,6 +79,7 @@ const create = async (req, res) => {
         });
 
         res.send(result.buffer);
+
     } catch (error) {
         console.error('Error Modul 2:', error);
         res.status(500).json({
@@ -86,7 +93,7 @@ const preview = async (req, res) => {
     try {
         const { nomorSurat, list_tamu } = req.body;
 
-        // Logic Nomor Surat (Untuk preview, kalau kosong kita kasih dummy saja biar cepat)
+        // Logic Nomor Surat Dummy untuk Preview
         let finalNomorSurat = nomorSurat || "XXX/PREVIEW/2025";
 
         const payload = {
@@ -95,9 +102,10 @@ const preview = async (req, res) => {
             list_tamu: list_tamu,
         };
 
+        // Panggil Service dengan mode preview = true
         const result = await undanganService.processSuratUndangan(payload, 'pdf', true);
 
-        // Langsung kirim buffer ke Frontend
+        // Langsung kirim buffer ke Frontend (Inline)
         res.set({
             'Content-Type': 'application/pdf',
             'Content-Disposition': 'inline; filename=preview.pdf',

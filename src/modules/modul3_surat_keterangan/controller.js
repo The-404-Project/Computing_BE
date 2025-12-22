@@ -169,3 +169,127 @@ async function getNextNumber(req, res) {
 
 module.exports.generateSuratKeterangan = generateSuratKeterangan;
 module.exports.getNextNumber = getNextNumber;
+const { addWatermarkToPdf } = require('../../utils/doc_generator');
+const Document = require('../../models/Document');
+
+async function previewSuratKeterangan(req, res) {
+  try {
+    const body = req.body || {};
+    const jenis = body.jenis_surat || body.jenisSurat || '';
+    const nim = body.nim || '';
+
+    if (!jenis) {
+      return res.status(400).json({ message: 'jenis_surat required' });
+    }
+    if (!nim) {
+      return res.status(400).json({ message: 'nim required' });
+    }
+
+    const finalNomorSurat = body.nomorSurat || body.nomor_surat || 'XXX/PREVIEW/2025';
+
+    const payload = {
+      nomorSurat: finalNomorSurat,
+      nim: nim,
+      jenis_surat: jenis,
+      keperluan: body.keperluan || body.keterangan || '',
+      kota: body.kota || 'Bandung',
+      tanggal: body.tanggal || '',
+      nama_dekan: body.nama_dekan || '',
+      nip_dekan: body.nip_dekan || '',
+    };
+
+    const result = await service.processSuratKeteranganGeneration(payload, 'pdf');
+    const watermarked = await addWatermarkToPdf(result.buffer);
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename=preview.pdf',
+      'Content-Length': watermarked.length,
+    });
+    return res.send(watermarked);
+  } catch (error) {
+    console.error('Error Preview Modul 3:', error);
+    return res.status(500).json({
+      message: 'Gagal membuat preview',
+      error: error.message,
+    });
+  }
+}
+
+async function createSuratKeterangan(req, res) {
+  try {
+    const body = req.body || {};
+    const jenis = body.jenis_surat || body.jenisSurat || '';
+    const nim = body.nim || '';
+
+    if (!jenis) {
+      return res.status(400).json({ message: 'jenis_surat required' });
+    }
+    if (!nim) {
+      return res.status(400).json({ message: 'nim required' });
+    }
+
+    let finalNomorSurat = body.nomorSurat || body.nomor_surat || null;
+    if (!finalNomorSurat) {
+      try {
+        finalNomorSurat = await service.getNextDocNumber();
+      } catch {
+        finalNomorSurat = `SK-${Date.now()}`;
+      }
+    }
+
+    const requestedFormat = (req.query && req.query.format) ? String(req.query.format) : 'docx';
+
+    const payload = {
+      nomorSurat: finalNomorSurat,
+      nim: nim,
+      jenis_surat: jenis,
+      keperluan: body.keperluan || body.keterangan || '',
+      kota: body.kota || 'Bandung',
+      tanggal: body.tanggal || '',
+      nama_dekan: body.nama_dekan || '',
+      nip_dekan: body.nip_dekan || '',
+    };
+
+    const result = await service.processSuratKeteranganGeneration(payload, requestedFormat);
+
+    try {
+      const user_id = req.user ? req.user.user_id : 1;
+      await Document.create({
+        doc_number: finalNomorSurat,
+        doc_type: 'surat_keterangan',
+        status: 'generated',
+        created_by: user_id,
+        file_path: null,
+        metadata: {
+          nim,
+          jenis_surat: jenis,
+          keperluan: payload.keperluan,
+          kota: payload.kota,
+          tanggal: payload.tanggal,
+          nama_dekan: payload.nama_dekan,
+          nip_dekan: payload.nip_dekan,
+          generated_filename: result.fileName,
+        },
+      });
+    } catch (dbError) {
+      console.error('[Modul 3] Error saving to database:', dbError);
+    }
+
+    res.set({
+      'Content-Type': result.mimeType,
+      'Content-Disposition': `attachment; filename=${result.fileName}`,
+      'Content-Length': result.buffer.length,
+    });
+    return res.send(result.buffer);
+  } catch (error) {
+    console.error('Error Create Modul 3:', error);
+    return res.status(500).json({
+      message: 'Gagal membuat surat keterangan',
+      error: error.message,
+    });
+  }
+}
+
+module.exports.previewSuratKeterangan = previewSuratKeterangan;
+module.exports.createSuratKeterangan = createSuratKeterangan;
