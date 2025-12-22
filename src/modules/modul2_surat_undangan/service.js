@@ -1,12 +1,11 @@
 // File: src/modules/modul2_surat_undangan/service.js
 
-const { generateWordFile, generatePdfFile } = require('../../utils/doc_generator');
+// Import watermark juga
+const { generateWordFile, generatePdfFile, addWatermarkToPdf } = require('../../utils/doc_generator');
 const fs = require('fs');
 const path = require('path');
 
 // --- HELPER FUNCTIONS ---
-
-// Helper 1: Ubah tanggal "2025-10-20" jadi nama hari "Senin"
 const getNamaHari = (dateString) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
@@ -14,7 +13,6 @@ const getNamaHari = (dateString) => {
     return date.toLocaleDateString('id-ID', { weekday: 'long' });
 };
 
-// Helper 2: Ubah tanggal "2025-10-20" jadi "20 Oktober 2025"
 const formatTanggalIndo = (dateString) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
@@ -23,18 +21,13 @@ const formatTanggalIndo = (dateString) => {
 };
 
 // --- MAIN SERVICE FUNCTION ---
-
-const processSuratUndangan = async (data, format = 'docx') => {
-    // 1. Ambil Data dari Controller
+const processSuratUndangan = async (data, format = 'docx', isPreview = false) => {
+    
+    // 1. Destructure Data
     const { 
-        jenis_surat,    // <--- Dropdown dari FE (undangan_rapat/seminar/kegiatan)
-        nomorSurat, 
-        lampiran, 
-        tanggalAcara, 
-        tempat, 
-        agenda,
-        list_tamu, 
-        waktuMulai, waktuAcara, waktuSelesai 
+        jenis_surat, nomorSurat, lampiran, 
+        tanggalAcara, tempat, agenda,
+        list_tamu, waktuMulai, waktuAcara, waktuSelesai 
     } = data;
 
     // 2. Logic Format Tanggal & Waktu
@@ -42,114 +35,186 @@ const processSuratUndangan = async (data, format = 'docx') => {
     const tgl_acara = formatTanggalIndo(tanggalAcara);
     const today_indo = formatTanggalIndo(new Date());
     
-    // Logic Gabung Waktu (Mulai - Selesai)
     const jamMulai = waktuMulai || waktuAcara; 
     let waktu_fix = "-";
     if (jamMulai) {
          waktu_fix = waktuSelesai ? `${jamMulai} - ${waktuSelesai} WIB` : `${jamMulai} WIB`;
     }
 
-    // 3. LOGIC PERIHAL OTOMATIS (Sesuai Request)
-    // Mengubah kode dropdown menjadi teks Perihal yang rapi
-    let perihal_otomatis = "Undangan"; // Default
-
-    if (jenis_surat === 'undangan_rapat') {
-        perihal_otomatis = "Undangan Rapat";
-    } else if (jenis_surat === 'undangan_seminar') {
-        perihal_otomatis = "Undangan Seminar";
-    } else if (jenis_surat === 'undangan_kegiatan') {
-        perihal_otomatis = "Undangan Kegiatan";
+    // 3. Logic Perihal Otomatis
+    let perihal_otomatis = "Undangan"; 
+    
+    // Cek apakah menggunakan template kustom (format: template_123)
+    if (jenis_surat && jenis_surat.startsWith('template_')) {
+        const templateId = parseInt(jenis_surat.replace('template_', ''));
+        if (!isNaN(templateId)) {
+            try {
+                const Template = require('../../models/Template');
+                const template = await Template.findOne({ 
+                    where: { 
+                        template_id: templateId,
+                        is_active: true 
+                    } 
+                });
+                
+                if (template && template.template_name) {
+                    // Gunakan nama template sebagai perihal
+                    perihal_otomatis = template.template_name;
+                    console.log(`[Modul 2] Using template name as perihal: ${perihal_otomatis}`);
+                } else {
+                    console.warn(`[Modul 2] Template ID ${templateId} not found, using default perihal`);
+                }
+            } catch (templateError) {
+                console.error('[Modul 2] Error loading template from database:', templateError);
+                // Fallback ke default
+            }
+        }
+    } else {
+        // Template default
+        if (jenis_surat === 'undangan_rapat') perihal_otomatis = "Undangan Rapat";
+        else if (jenis_surat === 'undangan_seminar') perihal_otomatis = "Undangan Seminar";
+        else if (jenis_surat === 'undangan_kegiatan') perihal_otomatis = "Undangan Kegiatan";
     }
 
-    // 4. LOGIC MAIL MERGE (Page Break Aman)
-    // Kita pakai Boolean: showPageBreak = true (jika bukan terakhir)
+    // 4. Logic Mail Merge (Jabatan & Page Break)
     let listTamuReady = [];
     if (list_tamu && Array.isArray(list_tamu)) {
         listTamuReady = list_tamu.map((tamu, index) => {
-            // Tamu sekarang bentuknya object { nama, jabatan }
-            // Tapi kita jaga-jaga kalau input string lama masih masuk
             const namaTamu = typeof tamu === 'string' ? tamu : tamu.nama;
-            
-            // Ambil jabatan (Kalau kosong/undefined, jadi null biar logic template jalan)
             const jabatanTamu = (typeof tamu === 'object' && tamu.jabatan) ? tamu.jabatan : null;
-
             const isLastItem = index === list_tamu.length - 1;
 
             return { 
                 nama: namaTamu,
-                
-                // MAPPING JABATAN KE SINI
-                jabatan: jabatanTamu, 
-
+                jabatan: jabatanTamu,
                 showPageBreak: !isLastItem 
             };
         });
     }
 
-    // 5. Masukkan Data ke Context (Siap dirender ke Word)
+    // 5. Masukkan Data ke Context
     const context = {
         nomor_surat: nomorSurat || "XXX/UND/FI/2025",
         lampiran: lampiran || "-",
-        
-        // Perihal otomatis terisi sesuai jenis surat
         perihal: perihal_otomatis, 
-
         hari: hari_acara,
         tanggal: tgl_acara,
         waktu: waktu_fix,
         tempat: tempat || "-",
         agenda: agenda || "-",
         tanggal_surat: today_indo,
-        
-        // Data Loop Tamu
         list_tamu: listTamuReady 
     };
 
-    // 6. Generate File Word
-    const templateName = 'template_undangan.docx'; 
-    // Memanggil fungsi dari doc_generator.js
-    const docxBuffer = generateWordFile(templateName, context);
+    // 6. Generate Word Buffer
+    // Cek apakah menggunakan template kustom
+    let templateName = 'template_undangan.docx'; // Default
+    let templatePath = null;
+    
+    if (jenis_surat && jenis_surat.startsWith('template_')) {
+        const templateId = parseInt(jenis_surat.replace('template_', ''));
+        if (!isNaN(templateId)) {
+            try {
+                const Template = require('../../models/Template');
+                const template = await Template.findOne({ 
+                    where: { 
+                        template_id: templateId,
+                        is_active: true 
+                    } 
+                });
+                
+                if (template && template.file_path) {
+                    // Extract filename dari file_path
+                    const path = require('path');
+                    const fileName = path.basename(template.file_path);
+                    templateName = fileName;
+                    templatePath = template.file_path;
+                    console.log(`[Modul 2] Using custom template: ${template.template_name} (${fileName})`);
+                } else {
+                    console.warn(`[Modul 2] Template ID ${templateId} not found, using default template`);
+                }
+            } catch (templateError) {
+                console.error('[Modul 2] Error loading template from database:', templateError);
+                // Fallback ke default
+            }
+        }
+    }
+    
+    // Generate DOCX Buffer
+    let docxBuffer;
+    if (templatePath) {
+        const fs = require('fs');
+        const path = require('path');
+        const PizZip = require('pizzip');
+        const Docxtemplater = require('docxtemplater');
+        
+        const fullPath = path.resolve(__dirname, '../../', templatePath);
+        if (fs.existsSync(fullPath)) {
+            console.log(`[Modul 2] Using template from database: ${fullPath}`);
+            // Baca template dari path database
+            const content = fs.readFileSync(fullPath, 'binary');
+            const zip = new PizZip(content);
+            const doc = new Docxtemplater(zip, { 
+                paragraphLoop: true, 
+                linebreaks: true,
+                nullGetter: () => "" 
+            });
+            doc.render(context);
+            docxBuffer = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+        } else {
+            console.warn(`[Modul 2] Template file not found at ${fullPath}, using default`);
+            docxBuffer = generateWordFile(templateName, context);
+        }
+    } else {
+        docxBuffer = generateWordFile(templateName, context);
+    }
 
-    // Setup Variable Hasil
     let finalBuffer = docxBuffer;
     let mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
     let ext = 'docx';
 
-    // 7. Handle PDF Conversion (Jika user minta format=pdf)
-    if (format === 'pdf') {
-        // Memanggil fungsi PDF dari doc_generator.js (versi CLI)
+    // 7. Logic PDF & Preview
+    if (format === 'pdf' || isPreview) {
+        // Generate PDF bersih via LibreOffice
         finalBuffer = await generatePdfFile(docxBuffer);
         mimeType = 'application/pdf';
         ext = 'pdf';
+
+        // --- CEK APAKAH INI PREVIEW? JIKA YA, TAMBAH WATERMARK ---
+        if (isPreview) {
+            finalBuffer = await addWatermarkToPdf(finalBuffer);
+        }
+        // ---------------------------------------------------------
     }
 
-    // 8. Penamaan File & Penyimpanan Lokal
-    // Nama file: Undangan_Rapat_17099283.docx
+    // 8. Penamaan File
     const safeName = perihal_otomatis.replace(/\s+/g, '_'); 
     const fileName = `${safeName}_${Date.now()}.${ext}`;
 
-    // Tentukan Folder Output: Computing_BE/output/generated_documents/
-    const outputDir = path.resolve(__dirname, '../../../output/generated_documents');
+    let fullPath = null;
 
-    // Buat folder jika belum ada
-    if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true });
+    // --- 9. SAVE LOGIC: HANYA SIMPAN JIKA BUKAN PREVIEW ---
+    if (!isPreview) {
+        // Simpan ke folder permanent jika bukan preview
+        const outputDir = path.resolve(__dirname, '../../../output/generated_documents');
+
+        if (!fs.existsSync(outputDir)) {
+            fs.mkdirSync(outputDir, { recursive: true });
+        }
+
+        fullPath = path.join(outputDir, fileName);
+
+        try {
+            fs.writeFileSync(fullPath, finalBuffer);
+            console.log(`[Service] File disimpan permanen: ${fullPath}`);
+        } catch (err) {
+            console.error('[Service] Gagal menyimpan file:', err);
+        }
+    } else {
+        console.log('[Service] Mode Preview: File TIDAK disimpan ke storage.');
     }
 
-    
-
-    // Path Lengkap File
-    const fullPath = path.join(outputDir, fileName);
-
-    // Simpan File Fisik
-    try {
-        fs.writeFileSync(fullPath, finalBuffer);
-        console.log(`[Service] File berhasil disimpan di: ${fullPath}`);
-    } catch (err) {
-        console.error('[Service] Gagal menyimpan file lokal:', err);
-    }
-
-    // 9. Return Data ke Controller
+    // 10. Return Data
     return { 
         buffer: finalBuffer, 
         fileName: fileName, 

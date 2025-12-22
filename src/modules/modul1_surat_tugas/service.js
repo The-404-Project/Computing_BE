@@ -110,26 +110,43 @@ const processSuratTugasGeneration = async (data, format = 'docx') => {
   // Jika menggunakan template dari database, gunakan file_path langsung
   let docxBuffer;
   if (templatePath) {
-    const fs = require('fs');
-    const path = require('path');
-    const PizZip = require('pizzip');
-    const Docxtemplater = require('docxtemplater');
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const PizZip = require('pizzip');
+      const Docxtemplater = require('docxtemplater');
 
-    const fullPath = path.resolve(__dirname, '../../', templatePath);
-    if (fs.existsSync(fullPath)) {
-      console.log(`[Modul 1] Using template from database: ${fullPath}`);
-      // Baca template dari path database
-      const content = fs.readFileSync(fullPath, 'binary');
-      const zip = new PizZip(content);
-      const doc = new Docxtemplater(zip, {
-        paragraphLoop: true,
-        linebreaks: true,
-        nullGetter: () => '',
-      });
-      doc.render(context);
-      docxBuffer = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
-    } else {
-      console.warn(`[Modul 1] Template file not found at ${fullPath}, using default`);
+      const fullPath = path.resolve(__dirname, '../../', templatePath);
+      console.log(`[Modul 1] Attempting to use template from database: ${fullPath}`);
+      
+      if (fs.existsSync(fullPath)) {
+        console.log(`[Modul 1] Template file found, reading...`);
+        // Baca template dari path database
+        const content = fs.readFileSync(fullPath, 'binary');
+        const zip = new PizZip(content);
+        const doc = new Docxtemplater(zip, {
+          paragraphLoop: true,
+          linebreaks: true,
+          nullGetter: () => '',
+        });
+        
+        try {
+          doc.render(context);
+          docxBuffer = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+          console.log(`[Modul 1] Template rendered successfully`);
+        } catch (renderError) {
+          console.error('[Modul 1] Error rendering template:', renderError);
+          throw new Error(`Gagal merender template: ${renderError.message}`);
+        }
+      } else {
+        console.warn(`[Modul 1] Template file not found at ${fullPath}, using default`);
+        docxBuffer = generateWordFile(templateName, context);
+      }
+    } catch (templateError) {
+      console.error('[Modul 1] Error processing custom template:', templateError);
+      console.error('[Modul 1] Stack:', templateError.stack);
+      // Fallback ke template default
+      console.log('[Modul 1] Falling back to default template');
       docxBuffer = generateWordFile(templateName, context);
     }
   } else {

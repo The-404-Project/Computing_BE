@@ -82,4 +82,37 @@ const create = async (req, res) => {
     }
 };
 
-module.exports = { create };
+const preview = async (req, res) => {
+    try {
+        const { nomorSurat, list_tamu } = req.body;
+
+        // Logic Nomor Surat (Untuk preview, kalau kosong kita kasih dummy saja biar cepat)
+        let finalNomorSurat = nomorSurat || "XXX/PREVIEW/2025";
+
+        const payload = {
+            ...req.body,
+            nomorSurat: finalNomorSurat,
+            list_tamu: list_tamu,
+        };
+
+        const result = await undanganService.processSuratUndangan(payload, 'pdf', true);
+
+        // Langsung kirim buffer ke Frontend
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': 'inline; filename=preview.pdf',
+            'Content-Length': result.buffer.length,
+        });
+
+        res.send(result.buffer);
+
+    } catch (error) {
+        console.error('Error Preview Modul 2:', error);
+        res.status(500).json({
+            message: 'Gagal membuat preview',
+            error: error.message,
+        });
+    }
+};
+
+module.exports = { create, preview };

@@ -5,4 +5,7 @@ const controller = require('./controller');
 // URL: http://localhost:4000/api/surat-undangan/create
 router.post('/create', controller.create);
 
+// URL: http://localhost:4000/api/surat-undangan/preview
+router.post('/preview', controller.preview);
+
 module.exports = router;
