@@ -33,14 +33,7 @@ router.post('/generate-docx', controller.generateDocx);
 // Generate PDF (download)
 router.post('/generate-pdf', controller.generatePdf);
 
-/* =========================================================
-   VERSIONING
-   ========================================================= */
-
-// List saved versions
-router.get('/versions', controller.listVersions);
-
-// Download specific version DOCX by ID
-router.get('/versions/:id/download', controller.downloadVersion);
+// Generate Preview (inline PDF)
+router.post('/preview', controller.generatePreview);
 
 module.exports = router;

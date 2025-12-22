@@ -158,9 +158,10 @@ function normalizeData(data = {}) {
  * Processes document generation (DOCX or PDF).
  * @param {object} payload - Request payload containing templateName and data.
  * @param {string} format - Output format ('docx' or 'pdf').
+ * @param {boolean} isPreview - If true, adds a watermark to the PDF.
  * @returns {object} Result object with buffer, fileName, and mimeType.
  */
-async function processSuratGeneration(payload, format = 'docx') {
+async function processSuratGeneration(payload, format = 'docx', isPreview = false) {
   const { templateName, data } = payload;
   const normalizedData = normalizeData(data);
 
@@ -172,10 +173,16 @@ async function processSuratGeneration(payload, format = 'docx') {
   let ext = 'docx';
 
   // 2. Convert to PDF if requested
-  if (format === 'pdf') {
+  if (format === 'pdf' || isPreview) {
     finalBuffer = await generatePdfFile(docxBuffer);
     mimeType = 'application/pdf';
     ext = 'pdf';
+
+    // Tambahkan Watermark jika Preview
+    if (isPreview) {
+        const { addWatermarkToPdf } = require('../../utils/doc_generator');
+        finalBuffer = await addWatermarkToPdf(finalBuffer);
+    }
   }
 
   // 3. Generate Filename

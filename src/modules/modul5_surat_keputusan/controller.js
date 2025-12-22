@@ -89,25 +89,13 @@ async function deleteTemplate(req, res) {
  */
 async function generateDocx(req, res) {
   try {
-    const { templateName, data, saveVersionName } = req.body;
+    const { templateName, data } = req.body;
 
     if (!templateName || !data) {
       return sendError(res, 400, 'templateName and data are required');
     }
 
     const result = await service.processSuratGeneration(req.body, 'docx');
-
-    if (saveVersionName) {
-      await model.saveVersion(
-        saveVersionName,
-        {
-          templateName,
-          data,
-          user: req.user?.name
-        },
-        result.buffer
-      );
-    }
 
     res.setHeader('Content-Type', result.mimeType);
     res.setHeader('Content-Disposition', `attachment; filename=${result.fileName}`);
@@ -141,6 +129,30 @@ async function generatePdf(req, res) {
 }
 
 /**
+ * Generate Preview (PDF with Watermark)
+ */
+async function generatePreview(req, res) {
+  try {
+    const { templateName, data } = req.body;
+
+    if (!templateName || !data) {
+      return sendError(res, 400, 'templateName and data are required');
+    }
+
+    // Panggil service dengan flag isPreview = true
+    const result = await service.processSuratGeneration(req.body, 'pdf', true);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    // Inline agar browser membuka di tab/iframe, bukan download
+    res.setHeader('Content-Disposition', 'inline; filename=preview.pdf');
+
+    return res.send(result.buffer);
+  } catch (error) {
+    return sendError(res, 500, 'Failed to generate preview', error);
+  }
+}
+
+/**
  * List available templates
  */
 async function listTemplates(req, res) {
@@ -152,57 +164,11 @@ async function listTemplates(req, res) {
   }
 }
 
-/**
- * List saved document versions
- */
-async function listVersions(req, res) {
-  try {
-    const filters = {
-      creator: req.query.creator,
-      date: req.query.date,
-      type: req.query.type,
-      search: req.query.search
-    };
-    const versions = await model.listVersions(filters);
-    return res.json({ versions });
-  } catch (error) {
-    return sendError(res, 500, 'Failed to list versions', error);
-  }
-}
-
-/**
- * Download a specific version file
- */
-async function downloadVersion(req, res) {
-  try {
-    const { id } = req.params;
-    const buffer = model.getVersionFile(id);
-
-    if (!buffer) {
-      return sendError(res, 404, 'Version not found');
-    }
-
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    );
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename=Surat_Version_${id}.docx`
-    );
-
-    return res.send(buffer);
-  } catch (error) {
-    return sendError(res, 500, 'Failed to download version', error);
-  }
-}
-
 module.exports = {
   uploadTemplate,
   deleteTemplate,
   generateDocx,
   generatePdf,
+  generatePreview,
   listTemplates,
-  listVersions,
-  downloadVersion,
 };
