@@ -132,6 +132,8 @@ async function processSuratKeteranganGeneration(data, format = 'docx') {
       tanggal,
       nama_dekan,
       nip_dekan,
+      nama_user,
+      role,
       // Data mahasiswa (jika sudah ada di metadata)
       nama,
       program_studi,
@@ -219,6 +221,8 @@ async function processSuratKeteranganGeneration(data, format = 'docx') {
       tanggal: tanggal || '',
       nama_dekan: nama_dekan || '',
       nip_dekan: nip_dekan || '',
+      nama_user: nama_user || '',
+      role: role || '',
     };
 
     console.log('[Surat Keterangan] Render data:', JSON.stringify(renderData));

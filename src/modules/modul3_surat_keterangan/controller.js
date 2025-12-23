@@ -185,6 +185,26 @@ async function previewSuratKeterangan(req, res) {
       return res.status(400).json({ message: 'nim required' });
     }
 
+    let currentUserName = null;
+    let currentUserRole = null;
+    try {
+      const authHeader = req.headers.authorization || '';
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
+        const jwt = require('jsonwebtoken');
+        const { SECRET_KEY } = require('../../utils/auth');
+        const decoded = jwt.verify(token, SECRET_KEY);
+        if (decoded) {
+          currentUserRole = decoded.role || null;
+          const User = require('../../models/User');
+          const userRow = await User.findOne({ where: { user_id: decoded.user_id } });
+          currentUserName = (userRow && userRow.full_name) ? userRow.full_name : decoded.username;
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
     const finalNomorSurat = body.nomorSurat || body.nomor_surat || 'XXX/PREVIEW/2025';
 
     const payload = {
@@ -196,6 +216,8 @@ async function previewSuratKeterangan(req, res) {
       tanggal: body.tanggal || '',
       nama_dekan: body.nama_dekan || '',
       nip_dekan: body.nip_dekan || '',
+      nama_user: body.nama_user || currentUserName || '',
+      role: body.role || currentUserRole || '',
     };
 
     const result = await service.processSuratKeteranganGeneration(payload, 'pdf');
@@ -240,6 +262,26 @@ async function createSuratKeterangan(req, res) {
 
     const requestedFormat = (req.query && req.query.format) ? String(req.query.format) : 'docx';
 
+    let currentUserName = null;
+    let currentUserRole = null;
+    try {
+      const authHeader = req.headers.authorization || '';
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
+        const jwt = require('jsonwebtoken');
+        const { SECRET_KEY } = require('../../utils/auth');
+        const decoded = jwt.verify(token, SECRET_KEY);
+        if (decoded) {
+          currentUserRole = decoded.role || null;
+          const User = require('../../models/User');
+          const userRow = await User.findOne({ where: { user_id: decoded.user_id } });
+          currentUserName = (userRow && userRow.full_name) ? userRow.full_name : decoded.username;
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
     const payload = {
       nomorSurat: finalNomorSurat,
       nim: nim,
@@ -249,6 +291,8 @@ async function createSuratKeterangan(req, res) {
       tanggal: body.tanggal || '',
       nama_dekan: body.nama_dekan || '',
       nip_dekan: body.nip_dekan || '',
+      nama_user: body.nama_user || currentUserName || '',
+      role: body.role || currentUserRole || '',
     };
 
     const result = await service.processSuratKeteranganGeneration(payload, requestedFormat);
@@ -269,6 +313,8 @@ async function createSuratKeterangan(req, res) {
           tanggal: payload.tanggal,
           nama_dekan: payload.nama_dekan,
           nip_dekan: payload.nip_dekan,
+          nama_user: payload.nama_user,
+          role: payload.role,
           generated_filename: result.fileName,
         },
       });
