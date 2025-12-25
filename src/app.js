@@ -12,7 +12,7 @@ const suratUndanganRoute = require('./modules/modul2_surat_undangan/route');
 const suratKeteranganRoute = require('./modules/modul3_surat_keterangan/route');
 const suratPengantarRoute = require('./modules/modul4_surat_pengantar/route');
 const suratKeputusanRoute = require('./modules/modul5_surat_keputusan/route');
-// const suratProdiRoute = require('./modules/modul6_surat_prodi/route');
+const suratProdiRoute = require('./modules/modul6_surat_prodi/route');
 // const suratLAAKRoute = require('./modules/modul7_surat_laa/route');
 const dashboardRoute = require('./modules/modul8_dashboard/route');
 
@@ -32,7 +32,7 @@ app.use('/api/surat-undangan', suratUndanganRoute);
 app.use('/api/surat-keterangan', suratKeteranganRoute);
 app.use('/api/surat-pengantar', suratPengantarRoute);
 app.use('/api/surat-keputusan', suratKeputusanRoute);
-// app.use('/api/surat-prodi', suratProdiRoute);
+app.use('/api/surat-prodi', suratProdiRoute);
 // app.use('/api/surat-laak', suratLAAKRoute);
 app.use('/api/dashboard', dashboardRoute);
 
