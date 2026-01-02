@@ -26,7 +26,7 @@ const generateNomorSurat = async () => {
 const create = async (req, res) => {
     try {
         // PERBAIKAN: Ambil 'lokasi' dari body, bukan 'tempat'
-        const { nomorSurat, perihal, kepada, tanggalAcara, lokasi, list_tamu, agenda } = req.body;
+        const { nomorSurat, perihal, kepada, tanggalAcara, lokasi, list_tamu, agenda, jenis_surat } = req.body;
         const user_id = req.user ? req.user.user_id : 1;
 
         // 1. Generate Nomor Surat jika kosong
@@ -54,6 +54,7 @@ const create = async (req, res) => {
                 created_by: user_id,
                 file_path: result.filePath,
                 metadata: {
+                    jenis_surat: jenis_surat || 'undangan_rapat', // Simpan jenis surat untuk display di arsip
                     perihal,
                     kepada_display: kepada,
                     list_tamu_json: list_tamu,
