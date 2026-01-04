@@ -3,7 +3,7 @@ const { Sequelize } = require('sequelize');
 // Database configuration dengan default values (seperti settings.js)
 const dbName = process.env.DB_NAME || 'db_persuratanfakultas';
 const dbUser = process.env.DB_USER || 'root';
-const dbPass = process.env.DB_PASS || '';
+const dbPass = process.env.DB_PASS || 'root';
 const dbHost = process.env.DB_HOST || 'localhost';
 const dbPort = parseInt(process.env.DB_PORT || '3306', 10);
 
