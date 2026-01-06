@@ -14,6 +14,7 @@ const templateMap = {
   'surat persetujuan krs': 'template_surat_persetujuan_krs.docx',
   'surat tugas pembimbing akademik': 'template_surat_tugas_pembimbing_akademik.docx',
   'surat keterangan penelitian/skripsi': 'template_surat_keterangan_penelitian_skripsi.docx',
+  'surat program studi': 'template_surat_program_studi.docx',
 };
 
 /**
@@ -292,8 +293,11 @@ async function processSuratProdiGeneration(data, format = 'docx') {
     const key = String(jenis_surat || '').toLowerCase().trim();
     const filenameTemplate = templateMap[key];
 
+    console.log('[Modul 6] Template mapping - Jenis surat:', jenis_surat, '| Key:', key, '| Template filename:', filenameTemplate);
+
     if (!filenameTemplate) {
-      throw new Error(`Jenis surat tidak dikenali: "${jenis_surat}"`);
+      console.error('[Modul 6] Template not found for jenis_surat:', jenis_surat);
+      throw new Error(`Jenis surat tidak dikenali: "${jenis_surat}". Pilihan yang tersedia: ${Object.keys(templateMap).join(', ')}`);
     }
 
     // Ambil data mahasiswa
@@ -343,12 +347,18 @@ async function processSuratProdiGeneration(data, format = 'docx') {
     // Path template
     const templatePath = path.join(__dirname, '../../templates/surat_templates/', filenameTemplate);
 
+    console.log('[Modul 6] Template path:', templatePath);
+    console.log('[Modul 6] Template exists:', fs.existsSync(templatePath));
+
     // Fallback ke template default jika tidak ada
     if (!fs.existsSync(templatePath)) {
       console.warn(`[Modul 6] Template ${filenameTemplate} not found, using default template`);
-      // Gunakan template surat keterangan sebagai fallback
-      const fallbackTemplate = path.join(__dirname, '../../templates/surat_templates/template_surat_keterangan_mahasiswa_aktif.docx');
+      // Gunakan template surat program studi sebagai fallback
+      const fallbackTemplate = path.join(__dirname, '../../templates/surat_templates/template_surat_program_studi.docx');
+      console.log('[Modul 6] Fallback template path:', fallbackTemplate);
+      console.log('[Modul 6] Fallback template exists:', fs.existsSync(fallbackTemplate));
       if (fs.existsSync(fallbackTemplate)) {
+        console.log('[Modul 6] Using fallback template');
         const content = fs.readFileSync(fallbackTemplate, 'binary');
         const zip = new PizZip(content);
         const doc = new Docxtemplater(zip, {
@@ -374,7 +384,15 @@ async function processSuratProdiGeneration(data, format = 'docx') {
           role: role || '',
         };
 
-        doc.render(renderData);
+        console.log('[Modul 6] Fallback render data:', JSON.stringify(renderData));
+
+        try {
+          doc.render(renderData);
+        } catch (err) {
+          console.error('[Modul 6] Fallback render error:', err);
+          throw new Error('Template fallback gagal dirender: ' + err.message);
+        }
+
         const docxBuffer = doc.getZip().generate({ type: 'nodebuffer' });
 
         let finalBuffer = docxBuffer;
@@ -394,6 +412,7 @@ async function processSuratProdiGeneration(data, format = 'docx') {
     }
 
     // Generate DOCX
+    console.log('[Modul 6] Reading template file...');
     const content = fs.readFileSync(templatePath, 'binary');
     const zip = new PizZip(content);
     const doc = new Docxtemplater(zip, {
@@ -419,7 +438,16 @@ async function processSuratProdiGeneration(data, format = 'docx') {
       role: role || '',
     };
 
-    doc.render(renderData);
+    console.log('[Modul 6] Render data:', JSON.stringify(renderData));
+
+    try {
+      doc.render(renderData);
+    } catch (err) {
+      console.error('[Modul 6] Render error:', err);
+      throw new Error('Template gagal dirender: ' + err.message);
+    }
+
+    console.log('[Modul 6] Generating DOCX buffer...');
     const docxBuffer = doc.getZip().generate({ type: 'nodebuffer' });
 
     // Handle PDF conversion
