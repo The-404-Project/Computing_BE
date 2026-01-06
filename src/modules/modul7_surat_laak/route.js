@@ -8,4 +8,7 @@ router.post('/create', controller.create);
 // URL: http://localhost:4000/api/surat-laak/preview
 router.post('/preview', controller.preview);
 
+// URL: http://localhost:4000/api/surat-laak/generate-nomor
+router.get('/generate-nomor', controller.generateNomor);
+
 module.exports = router;

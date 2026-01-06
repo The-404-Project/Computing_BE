@@ -6,29 +6,32 @@ const path = require('path');
 const processSuratLAAK = async (data, format = 'docx', isPreview = false) => {
     // 1. Destructure Data
     const { 
-        jenisSurat, nomorSurat, perihal, unit, tanggal, 
-        referensi, pembuka, isi, penutup, 
-        kriteriaList, lampiranList 
+        jenisSurat, nomorSurat, perihal, tujuan, unit, tanggal, 
+        pembuka, isi, penutup, 
+        kriteriaList, lampiranList, referensiList
     } = data;
 
     // 2. Pilih Template (HARDCODED)
-    // Apapun jenis suratnya, kita paksa pakai satu template default dulu.
-    // Nanti kalau butuh beda template per jenis surat, tinggal tambah IF/ELSE di sini.
-    let templateName = 'template_laak_default.docx'; 
+    let templateName = 'template_surat_laak_default.docx';
 
-    /* Contoh kalau mau beda template per jenis surat (hardcoded style):
-       if (jenisSurat === 'Laporan Audit Internal') {
-           templateName = 'template_laak_audit.docx';
-       }
-    */
+    if (jenisSurat === 'Surat Permohonan Akreditasi') {
+        templateName = 'template_surat_permohonan_akreditasi.docx';
+    } else if (jenisSurat === 'Laporan Audit Internal') {
+        templateName = 'template_laporan_audit_internal.docx';
+    } else if (jenisSurat === 'Surat Tindak Lanjut Audit') {
+        templateName = 'template_surat_tindak_lanjut_audit.docx';
+    } else if (jenisSurat === 'Berita Acara Visitasi') {
+        templateName = 'template_berita_acara_visitasi.docx';
+    }
 
     // 3. Siapkan Data Context (Mapping variable ke Word)
     const context = {
+        jenis_surat: jenisSurat || "-",
         nomor_surat: nomorSurat || "XXX/LAAK/DRAFT",
         perihal: perihal || "-",
+        tujuan: tujuan || "-",
         unit: unit || "-",
         tanggal: tanggal || new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
-        referensi: referensi || "-",
         
         // Konten Naskah
         pembuka: pembuka || "",
@@ -42,6 +45,11 @@ const processSuratLAAK = async (data, format = 'docx', isPreview = false) => {
         })),
         
         list_lampiran: (lampiranList || []).map((item, index) => ({
+            no: index + 1, // Tambah properti 'no'
+            ...item
+        })),
+
+        list_referensi: (referensiList || []).map((item, index) => ({
             no: index + 1, // Tambah properti 'no'
             ...item
         }))

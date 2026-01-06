@@ -4,10 +4,7 @@ const { Op } = require('sequelize');
 
 // Helper Auto Number (Backup jika frontend kosong)
 const generateNomorSurat = async () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    
+    const year = new Date().getFullYear();
     const count = await Document.count({
         where: {
             doc_type: 'surat_laak',
@@ -18,8 +15,20 @@ const generateNomorSurat = async () => {
         }
     });
     
-    return `${String(count + 1).padStart(3, '0')}/UNIV/LAAK/${month}/${year}`;
+    return `${String(count + 1).padStart(3, '0')}`;
 };
+
+// --- GENERATE NOMOR (API untuk Frontend) ---
+const generateNomor = async (req, res) => {
+    try {
+        const nomor = await generateNomorSurat();
+        res.json({ nomor }); // ⬅️ ini yang bikin data.nomor bisa dipakai
+    } catch (error) {
+        console.error('[Modul 7] Generate Nomor Error:', error);
+        res.status(500).json({ message: 'Gagal generate nomor surat' });
+    }
+};
+
 
 // --- CREATE (Export Final) ---
 const create = async (req, res) => {
@@ -95,4 +104,4 @@ const preview = async (req, res) => {
     }
 };
 
-module.exports = { create, preview };
+module.exports = { create, preview, generateNomorSurat, generateNomor };
