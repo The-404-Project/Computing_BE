@@ -2,15 +2,12 @@ const suratTugasService = require('./service');
 const Document = require('../../models/Document');
 const { Op } = require('sequelize');
 
-/**
- * Fungsi Auto Number (Format: 001/ST/FI/MM/YYYY)
- */
+// Auto Number Generator
 const generateNomorSurat = async () => {
     const today = new Date();
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const year = today.getFullYear();
     
-    // Hitung jumlah surat tipe 'surat_tugas' di bulan & tahun ini
     const count = await Document.count({
         where: {
             doc_type: 'surat_tugas',
@@ -24,90 +21,82 @@ const generateNomorSurat = async () => {
     return `${String(count + 1).padStart(3, '0')}/ST/FI/${month}/${year}`;
 };
 
-/**
- * Controller Modul 1: Handle request pembuatan Surat Tugas.
- */
+// --- CREATE / GENERATE FINAL ---
 const generate = async (req, res) => {
     try {
         const requestedFormat = req.query.format || 'docx'; 
-        
-        console.log(`[Modul 1] Generating ${req.body.jenis_surat} -> ${requestedFormat.toUpperCase()}`);
-
-        // Ambil data dari Body
-        const { nomorSurat, jenis_surat, namaPegawai, nip, pangkat, jabatan, tujuanTugas, keperluan, tanggalMulai, tanggalSelesai, biaya, kendaraan } = req.body;
-        
-        // Mock User ID (Nanti ganti dengan req.user.id dari middleware auth)
+        const { nomorSurat, namaPegawai, nip, tujuanTugas, keperluan, tanggalMulai, tanggalSelesai, biaya, kendaraan, jabatan, pangkat, tanggalSurat, jenis_surat } = req.body;
         const user_id = req.user ? req.user.user_id : 1;
 
-        // 1. Generate Nomor Surat Otomatis jika kosong
+        // Auto Number jika kosong
         let finalNomorSurat = nomorSurat;
         if (!finalNomorSurat) {
             finalNomorSurat = await generateNomorSurat();
         }
 
-        // 2. Siapkan Payload untuk Service
-        const payload = { 
-            ...req.body, 
-            nomorSurat: finalNomorSurat
-        };
+        const payload = { ...req.body, nomorSurat: finalNomorSurat };
 
-        // 3. Panggil Service khusus Surat Tugas
-        const result = await suratTugasService.processSuratTugasGeneration(payload, requestedFormat);
+        // Panggil Service
+        const result = await suratTugasService.processSuratTugasGeneration(payload, requestedFormat, false);
 
-        // 4. Simpan Log ke Database (Tabel documents) - Jangan block jika error
+        // Simpan ke Database
         try {
             await Document.create({
                 doc_number: finalNomorSurat,
                 doc_type: 'surat_tugas',
                 status: 'generated',
                 created_by: user_id,
-                // Simpan detail input di metadata (JSON)
+                file_path: result.filePath,
                 metadata: {
-                    jenis_surat,
-                    namaPegawai,
-                    nip,
-                    pangkat,
-                    jabatan,
-                    tujuanTugas,
-                    keperluan,
-                    tanggalMulai,
-                    tanggalSelesai,
-                    biaya,
-                    kendaraan,
+                    jenis_surat, tanggalSurat,
+                    namaPegawai, nip, jabatan, pangkat,
+                    tujuanTugas, keperluan,
+                    tanggalMulai, tanggalSelesai,
+                    biaya, kendaraan,
                     generated_filename: result.fileName
                 }
             });
-            console.log(`[Modul 1] Document saved to database: ${finalNomorSurat}`);
+            console.log(`[Modul 1] Document saved to DB: ${finalNomorSurat}`);
         } catch (dbError) {
-            console.error('[Modul 1] Error saving to database:', dbError);
-            // Continue anyway, don't block file download
+            console.error('[Modul 1] DB Error:', dbError);
         }
 
-        // 5. Set headers agar browser mendownload file
         res.set({
             'Content-Type': result.mimeType,
             'Content-Disposition': `attachment; filename=${result.fileName}`,
             'Content-Length': result.buffer.length
         });
-
-        // 6. Kirim binary data
         res.send(result.buffer);
 
     } catch (error) {
         console.error('[Modul 1 Error]', error);
-        console.error('[Modul 1 Error Stack]', error.stack);
-        
-        // Pastikan response belum dikirim
-        if (!res.headersSent) {
-            res.status(500).json({ 
-                message: 'Failed to generate Surat Tugas', 
-                error: error.message,
-                details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-            });
-        } else {
-            console.error('[Modul 1] Response already sent, cannot send error response');
-        }
+        res.status(500).json({ message: 'Gagal membuat Surat Tugas', error: error.message });
     }
 };
 
-module.exports = { generate };
+// --- PREVIEW ---
+const preview = async (req, res) => {
+    try {
+        const { nomorSurat } = req.body;
+        
+        // Dummy number untuk preview
+        let finalNomorSurat = nomorSurat || "XXX/PREVIEW/2025";
+        const payload = { ...req.body, nomorSurat: finalNomorSurat };
+
+        // Panggil Service dengan mode Preview = true
+        const result = await suratTugasService.processSuratTugasGeneration(payload, 'pdf', true);
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': 'inline; filename=preview.pdf',
+            'Content-Length': result.buffer.length,
+        });
+        res.send(result.buffer);
+
+    } catch (error) {
+        console.error('[Modul 1 Preview Error]', error);
+        res.status(500).json({ message: 'Gagal preview', error: error.message });
+    }
+};
+
+module.exports = { generate, preview };
