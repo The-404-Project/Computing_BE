@@ -388,6 +388,46 @@ async function downloadDocumentService(id, format = 'docx') {
       result = await keteranganService.processSuratKeteranganGeneration(keteranganData, format);
       break;
 
+    case 'surat_keputusan':
+    case 'surat_edaran':
+      const keputusanService = require('../modul5_surat_keputusan/service');
+      const keputusanData = {
+        templateName: metadata.templateName || 'template_surat_keputusan_dekan.docx',
+        docType: metadata.docType || null,
+        data: {
+          perihal: metadata.perihal || '',
+          nomor_surat: document.doc_number,
+          tempat: metadata.tempat || '',
+          tanggal_penetapan: metadata.tanggal_penetapan || '',
+          menimbang_rows: metadata.menimbang_rows || [],
+          mengingat_rows: metadata.mengingat_rows || [],
+          memperhatikan_rows: metadata.memperhatikan_rows || [],
+          memutuskan: metadata.memutuskan || {},
+          approvers: metadata.approvers || [],
+        },
+      };
+      result = await keputusanService.processSuratGeneration(keputusanData, format);
+      break;
+
+    case 'surat_laak':
+      const laakService = require('../modul7_surat_laak/service');
+      const laakData = {
+        jenisSurat: metadata.jenis_surat || 'Surat LAAK',
+        nomorSurat: document.doc_number,
+        perihal: metadata.perihal || '',
+        tujuan: metadata.tujuan || '',
+        unit: metadata.unit || '',
+        tanggal: metadata.tanggal || '',
+        pembuka: metadata.pembuka || '',
+        isi: metadata.isi || '',
+        penutup: metadata.penutup || '',
+        kriteriaList: metadata.kriteriaList || [],
+        lampiranList: metadata.lampiranList || [],
+        referensiList: metadata.referensiList || [],
+      };
+      result = await laakService.processSuratLAAK(laakData, format);
+      break;
+
     default:
       throw new Error(`Tipe dokumen ${docType} belum didukung untuk download`);
   }

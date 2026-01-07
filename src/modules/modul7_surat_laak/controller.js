@@ -57,10 +57,22 @@ const create = async (req, res) => {
                 created_by: user_id,
                 file_path: result.filePath,
                 metadata: {
-                    ...payload,
+                    jenis_surat: payload.jenisSurat || 'Surat LAAK', // Simpan jenis surat yang spesifik
+                    nomorSurat: finalNomor,
+                    perihal: payload.perihal || '',
+                    tujuan: payload.tujuan || '',
+                    unit: payload.unit || '',
+                    tanggal: payload.tanggal || '',
+                    pembuka: payload.pembuka || '',
+                    isi: payload.isi || '',
+                    penutup: payload.penutup || '',
+                    kriteriaList: payload.kriteriaList || [],
+                    lampiranList: payload.lampiranList || [],
+                    referensiList: payload.referensiList || [],
                     generated_filename: result.fileName
                 }
             });
+            console.log(`[Modul 7] Document saved to database: ${finalNomor}, Jenis: ${payload.jenisSurat || 'Surat LAAK'}`);
         } catch (dbErr) {
             console.error('[Modul 7] DB Error:', dbErr);
         }
