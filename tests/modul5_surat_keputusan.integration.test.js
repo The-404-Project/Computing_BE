@@ -1,9 +1,9 @@
 const request = require('supertest');
-const app = require('../../src/app');
-const service = require('../../src/modules/modul5_surat_keputusan/service');
+const app = require('../src/app');
+const service = require('../src/modules/modul5_surat_keputusan/service');
 
 // Mock Database Config
-jest.mock('../../src/config/database', () => ({
+jest.mock('../src/config/database', () => ({
     authenticate: jest.fn().mockResolvedValue(),
     define: jest.fn().mockReturnValue({
         belongsTo: jest.fn(),
@@ -12,7 +12,7 @@ jest.mock('../../src/config/database', () => ({
 }));
 
 // Mock Service
-jest.mock('../../src/modules/modul5_surat_keputusan/service');
+jest.mock('../src/modules/modul5_surat_keputusan/service');
 
 describe('Integration Test: Modul 5 Surat Keputusan', () => {
     beforeEach(() => {

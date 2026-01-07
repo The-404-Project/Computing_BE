@@ -1,12 +1,12 @@
 const request = require('supertest');
 const fs = require('fs');
-const app = require('../../src/app');
-const service = require('../../src/modules/modul3_surat_keterangan/service');
+const app = require('../src/app');
+const service = require('../src/modules/modul3_surat_keterangan/service');
 const path = require('path');
-const Document = require('../../src/models/Document');
+const Document = require('../src/models/Document');
 
 // Mock Database Config
-jest.mock('../../src/config/database', () => ({
+jest.mock('../src/config/database', () => ({
     authenticate: jest.fn().mockResolvedValue(),
     define: jest.fn().mockReturnValue({
         belongsTo: jest.fn(),
@@ -15,17 +15,17 @@ jest.mock('../../src/config/database', () => ({
 }));
 
 // Mock Models
-jest.mock('../../src/models/Document', () => ({
+jest.mock('../src/models/Document', () => ({
     create: jest.fn(),
     count: jest.fn(),
     findOne: jest.fn(),
 }));
-jest.mock('../../src/models/User', () => ({
+jest.mock('../src/models/User', () => ({
     findOne: jest.fn(),
 }));
 
 // Mock Dependencies
-jest.mock('../../src/modules/modul3_surat_keterangan/service');
+jest.mock('../src/modules/modul3_surat_keterangan/service');
 jest.mock('pizzip', () => {
     return jest.fn().mockImplementation(() => ({
         file: jest.fn()
@@ -39,7 +39,7 @@ jest.mock('docxtemplater', () => {
         })
     }));
 });
-jest.mock('../../src/utils/doc_generator', () => ({
+jest.mock('../src/utils/doc_generator', () => ({
     addWatermarkToPdf: jest.fn().mockResolvedValue(Buffer.from('mock pdf watermark'))
 }));
 

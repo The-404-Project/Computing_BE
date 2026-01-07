@@ -1,10 +1,10 @@
 const request = require('supertest');
-const app = require('../../src/app');
-const service = require('../../src/modules/modul1_surat_tugas/service');
-const Document = require('../../src/models/Document');
+const app = require('../src/app');
+const service = require('../src/modules/modul1_surat_tugas/service');
+const Document = require('../src/models/Document');
 
 // Mock Database Config
-jest.mock('../../src/config/database', () => ({
+jest.mock('../src/config/database', () => ({
     authenticate: jest.fn().mockResolvedValue(),
     define: jest.fn().mockReturnValue({
         belongsTo: jest.fn(),
@@ -13,18 +13,18 @@ jest.mock('../../src/config/database', () => ({
 }));
 
 // Mock Models
-jest.mock('../../src/models/Document', () => ({
+jest.mock('../src/models/Document', () => ({
     create: jest.fn(),
     count: jest.fn(),
     findOne: jest.fn(),
     update: jest.fn(),
 }));
-jest.mock('../../src/models/User', () => ({}));
-jest.mock('../../src/models/Mahasiswa', () => ({}));
-jest.mock('../../src/models/Template', () => ({}));
+jest.mock('../src/models/User', () => ({}));
+jest.mock('../src/models/Mahasiswa', () => ({}));
+jest.mock('../src/models/Template', () => ({}));
 
 // Mock Service
-jest.mock('../../src/modules/modul1_surat_tugas/service');
+jest.mock('../src/modules/modul1_surat_tugas/service');
 
 describe('Integration Test: Modul 1 Surat Tugas', () => {
     beforeEach(() => {

@@ -1,10 +1,10 @@
 const request = require('supertest');
-const app = require('../../src/app');
-const service = require('../../src/modules/modul7_surat_laak/service');
-const Document = require('../../src/modules/modul7_surat_laak/model');
+const app = require('../src/app');
+const service = require('../src/modules/modul7_surat_laak/service');
+const Document = require('../src/modules/modul7_surat_laak/model');
 
 // Mock Database Config
-jest.mock('../../src/config/database', () => ({
+jest.mock('../src/config/database', () => ({
     authenticate: jest.fn().mockResolvedValue(),
     define: jest.fn().mockReturnValue({
         belongsTo: jest.fn(),
@@ -13,8 +13,8 @@ jest.mock('../../src/config/database', () => ({
 }));
 
 // Mock Service and Model
-jest.mock('../../src/modules/modul7_surat_laak/service');
-jest.mock('../../src/modules/modul7_surat_laak/model', () => ({
+jest.mock('../src/modules/modul7_surat_laak/service');
+jest.mock('../src/modules/modul7_surat_laak/model', () => ({
     create: jest.fn(),
     count: jest.fn(),
     findOne: jest.fn(),
