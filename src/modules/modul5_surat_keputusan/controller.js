@@ -31,14 +31,14 @@ const sendError = (res, status, message, error = null) => {
  */
 const getJenisSuratFromDocType = (docType) => {
   if (!docType) return null;
-  
+
   const jenisSuratMap = {
-    'SK_DEKAN': 'sk_dekan',
-    'SK_PANITIA': 'sk_panitia',
-    'SE_AKADEMIK': 'se_akademik',
-    'SE_UMUM': 'se_umum',
+    SK_DEKAN: 'sk_dekan',
+    SK_PANITIA: 'sk_panitia',
+    SE_AKADEMIK: 'se_akademik',
+    SE_UMUM: 'se_umum',
   };
-  
+
   return jenisSuratMap[docType] || null;
 };
 
@@ -119,7 +119,7 @@ async function generateDocx(req, res) {
     // Simpan ke database
     try {
       const user_id = req.user ? req.user.user_id : 1;
-      
+
       // Tentukan doc_type berdasarkan templateName atau docType
       let documentType = 'surat_keputusan'; // default
       if (templateName && templateName.includes('edaran')) {
@@ -138,7 +138,7 @@ async function generateDocx(req, res) {
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
       }
-      
+
       const filePath = path.join(outputDir, result.fileName);
       if (!fs.existsSync(filePath)) {
         fs.writeFileSync(filePath, result.buffer);
@@ -196,7 +196,7 @@ async function generatePdf(req, res) {
     // Simpan ke database
     try {
       const user_id = req.user ? req.user.user_id : 1;
-      
+
       // Tentukan doc_type berdasarkan templateName atau docType
       let documentType = 'surat_keputusan'; // default
       if (templateName && templateName.includes('edaran')) {
@@ -215,7 +215,7 @@ async function generatePdf(req, res) {
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
       }
-      
+
       const filePath = path.join(outputDir, result.fileName);
       if (!fs.existsSync(filePath)) {
         fs.writeFileSync(filePath, result.buffer);
