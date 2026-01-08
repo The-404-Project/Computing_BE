@@ -18,18 +18,8 @@ const dashboardRoute = require('./modules/modul8_dashboard/route');
 
 const app = express();
 
-const allowedOrigins = (process.env.CORS_ORIGINS || '')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
-const allowAll = allowedOrigins.length === 0 || allowedOrigins.includes('*');
-
 const corsOptions = {
-  origin: (origin, callback) => {
-    if (allowAll || !origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error('Not allowed by CORS'));
-  },
+  origin: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposedHeaders: ['Content-Disposition'],
