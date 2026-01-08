@@ -18,23 +18,18 @@ const dashboardRoute = require('./modules/modul8_dashboard/route');
 
 const app = express();
 
-const corsOptions = {
-  origin: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['Content-Disposition'],
-  credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204,
-};
-
-app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
+app.use(
+    cors({
+        origin: '*',
+        credentials: true,
+    })
+);
+app.use(express.static('public'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
  
- 
+
 // untuk setiap modul menambkan route seperti ini, untuk sub routenya harus di folder routes masing masing!!!!
 // jangan menambahkan logika modul di sini!!!
 app.use('/api/auth', dashboardRoute);
