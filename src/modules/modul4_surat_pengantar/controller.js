@@ -31,17 +31,28 @@ const create = async (req, res) => {
     const { nomorSurat, jenis_surat, metadata, content_blocks, dynamic_data } = req.body;
     const user_id = req.user ? req.user.user_id : 1;
 
-    // A. Generate Nomor
-    let finalNomorSurat = nomorSurat;
-    if (!finalNomorSurat) {
+    const rawNomor = nomorSurat ? String(nomorSurat).trim() : '';
+    
+    let finalNomorSurat = rawNomor;
+
+    if (finalNomorSurat === '') {
+      console.log(`[Modul 4] Input Nomor Kosong. Generating auto number for: ${jenis_surat}...`);
       finalNomorSurat = await generateNomorSurat(jenis_surat);
+      console.log(`[Modul 4] Generated Number: ${finalNomorSurat}`);
+    } else {
+      console.log(`[Modul 4] Menggunakan Nomor Manual: ${finalNomorSurat}`);
     }
 
-    // B. Panggil Service (isPreview = false)
-    const payload = { ...req.body, nomorSurat: finalNomorSurat };
+    // Update Payload
+    const payload = { 
+        ...req.body, 
+        nomorSurat: finalNomorSurat 
+    };
+
+    // Panggil Service
     const result = await suratService.processSuratGeneration(payload, requestedFormat, false);
 
-    // C. Simpan ke Database
+    // Simpan ke Database
     const docType = jenis_surat && jenis_surat.includes('permohonan') ? 'surat_permohonan' : 'surat_pengantar';
     
     try {
@@ -57,14 +68,15 @@ const create = async (req, res) => {
           content_blocks,
           dynamic_data,
           generated_filename: result.fileName,
+          nomor_surat_final: finalNomorSurat 
         },
       });
-      console.log(`[Modul 4] DB Saved: ${finalNomorSurat}`);
+      console.log(`[Modul 4] DB Saved Success: ${finalNomorSurat}`);
     } catch (dbError) {
       console.error('[Modul 4] DB Save Error:', dbError);
     }
 
-    // D. Response Download
+    // Response Download
     res.set({
       'Content-Type': result.mimeType,
       'Content-Disposition': `attachment; filename=${result.fileName}`,
